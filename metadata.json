@@ -1,0 +1,6 @@
+{
+  "name": "Painel de Ordens de Serviço - N!GAMES",
+  "description": "Painel completo para gestão de ordens de serviço e clientes da assistência técnica.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

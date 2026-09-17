@@ -1,0 +1,326 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg: #0B0C0E;
+    --paper: #14171C;
+    --ink: #FFFFFF;
+    --ink-soft: #9CA3AF;
+    --line: #22262E;
+    --line-soft: #2A303C;
+    --red: #E51D24;
+    --red-dark: #C81018;
+    --red-tint: rgba(229, 29, 36, 0.12);
+    --radius: 6px;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: #0B0C0E;
+    color: #FFFFFF;
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Custom sleek dark scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #0B0C0E;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #2A303C;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #E51D24;
+  }
+
+  .font-mono {
+    font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+}
+
+/* ==========================================================================
+   LIGHT THEME DESIGN SYSTEM & COLOR OVERRIDES (.theme-light)
+   ========================================================================== */
+html.theme-light,
+.theme-light {
+  color-scheme: light;
+}
+
+html.theme-light body,
+.theme-light {
+  background-color: #F4F5F8 !important;
+  color: #0F172A !important;
+}
+
+/* Surfaces and Layout */
+.theme-light .bg-\[\#0B0C0E\],
+.theme-light .bg-\[\#0B0D11\] {
+  background-color: #F4F5F8 !important;
+  color: #0F172A !important;
+}
+
+.theme-light aside,
+.theme-light aside.bg-\[\#000000\] {
+  background-color: #FFFFFF !important;
+  border-color: #E2E8F0 !important;
+  color: #0F172A !important;
+  box-shadow: 1px 0 3px rgba(0, 0, 0, 0.04);
+}
+
+.theme-light header,
+.theme-light header.bg-\[\#0E1014\]\/90,
+.theme-light .bg-\[\#0E1014\] {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-color: #E2E8F0 !important;
+  backdrop-filter: blur(8px);
+}
+
+/* Cards and Panels */
+.theme-light .bg-\[\#14171C\] {
+  background-color: #FFFFFF !important;
+  border-color: #E2E8F0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.theme-light .bg-\[\#181B21\],
+.theme-light .bg-\[\#17191E\],
+.theme-light .bg-\[\#101216\],
+.theme-light .bg-\[\#1A1E26\],
+.theme-light .bg-\[\#0E1116\] {
+  background-color: #F8FAFC !important;
+  border-color: #E2E8F0 !important;
+}
+
+/* Buttons and Pills */
+.theme-light .bg-\[\#1C2028\] {
+  background-color: #F1F5F9 !important;
+  border-color: #CBD5E1 !important;
+  color: #1E293B !important;
+}
+
+.theme-light .hover\:bg-\[\#1C2028\]:hover,
+.theme-light .hover\:bg-\[\#252B36\]:hover,
+.theme-light .hover\:bg-\[\#252C38\]:hover,
+.theme-light .hover\:bg-\[\#22262E\]:hover {
+  background-color: #E2E8F0 !important;
+}
+
+.theme-light .hover\:bg-white\/\[0\.05\]:hover,
+.theme-light .hover\:bg-white\/10:hover {
+  background-color: #F1F5F9 !important;
+  color: #0F172A !important;
+}
+
+/* Borders */
+.theme-light .border-\[\#22252B\],
+.theme-light .border-\[\#22262E\],
+.theme-light .border-\[\#2D323C\],
+.theme-light .border-\[\#2A303C\],
+.theme-light .border-\[\#2D333F\],
+.theme-light .border-\[\#374151\] {
+  border-color: #E2E8F0 !important;
+}
+
+/* Typography Hierarchy */
+.theme-light .text-white,
+.theme-light .text-\[\#FFFFFF\] {
+  color: #0F172A;
+}
+
+.theme-light .text-\[\#D1D5DB\],
+.theme-light .text-\[\#F3F4F6\] {
+  color: #334155 !important;
+}
+
+.theme-light .text-\[\#9CA3AF\],
+.theme-light .text-\[\#6B7280\] {
+  color: #64748B !important;
+}
+
+.theme-light .text-\[\#374151\] {
+  color: #94A3B8 !important;
+}
+
+/* Form Controls (Inputs, Selects, Textareas) */
+.theme-light input:not([type="checkbox"]):not([type="radio"]),
+.theme-light select,
+.theme-light textarea {
+  background-color: #FFFFFF !important;
+  border-color: #CBD5E1 !important;
+  color: #0F172A !important;
+}
+
+.theme-light input::placeholder,
+.theme-light textarea::placeholder {
+  color: #94A3B8 !important;
+}
+
+.theme-light select option {
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+}
+
+/* Tables */
+.theme-light table thead tr {
+  background-color: #F8FAFC !important;
+  border-color: #E2E8F0 !important;
+}
+
+.theme-light table thead th {
+  color: #64748B !important;
+}
+
+.theme-light table tbody tr {
+  border-color: #F1F5F9 !important;
+}
+
+.theme-light table tbody tr:hover {
+  background-color: #F8FAFC !important;
+}
+
+/* Preserve White Text on High-Contrast Brand Badges and Buttons */
+.theme-light .bg-\[\#E51D24\],
+.theme-light .bg-\[\#E51D24\] *,
+.theme-light .bg-\[\#C81018\],
+.theme-light .bg-\[\#C81018\] *,
+.theme-light .bg-\[\#10B981\],
+.theme-light .bg-\[\#10B981\] *,
+.theme-light .bg-\[\#EF4444\],
+.theme-light .bg-\[\#EF4444\] *,
+.theme-light .bg-\[\#E11D48\],
+.theme-light .bg-\[\#E11D48\] *,
+.theme-light .bg-\[\#F43F5E\],
+.theme-light .bg-\[\#F43F5E\] *,
+.theme-light .bg-\[\#6B7280\],
+.theme-light .bg-\[\#6B7280\] *,
+.theme-light button.bg-\[\#E51D24\] span,
+.theme-light a.bg-\[\#E51D24\] span {
+  color: #FFFFFF !important;
+}
+
+.theme-light .bg-\[\#F59E0B\],
+.theme-light .bg-\[\#F59E0B\] * {
+  color: #000000 !important;
+}
+
+/* Modals */
+.theme-light .fixed.bg-black\/75,
+.theme-light .fixed.bg-black\/70,
+.theme-light .fixed.bg-\[\#0A0D12\]\/75 {
+  background-color: rgba(15, 23, 42, 0.55) !important;
+}
+
+/* Scrollbar for Light Theme */
+.theme-light ::-webkit-scrollbar-track {
+  background: #F4F5F8;
+}
+
+.theme-light ::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+}
+
+.theme-light ::-webkit-scrollbar-thumb:hover {
+  background: #E51D24;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm 10mm;
+  }
+
+  html,
+  body {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Completely hide app shell, sidebars, headers and non-print elements */
+  aside,
+  header,
+  nav,
+  #toast-container,
+  button,
+  .no-print,
+  .print\:hidden,
+  [data-no-print] {
+    display: none !important;
+  }
+
+  /* If printing from inside the app with modal open, hide everything outside the modal */
+  body:has(#print-modal-backdrop) #root > div > div > header,
+  body:has(#print-modal-backdrop) #root > div > div > main,
+  body:has(#print-modal-backdrop) aside {
+    display: none !important;
+  }
+
+  /* Reset modal containers into pure flow layout on paper */
+  #print-modal-backdrop {
+    position: static !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+    overflow: visible !important;
+    z-index: auto !important;
+    inset: auto !important;
+  }
+
+  #print-modal-dialog {
+    position: static !important;
+    max-height: none !important;
+    height: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  #printable-order-sheet {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    color: #000000 !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    border: none !important;
+    overflow: visible !important;
+  }
+
+  #printable-order-sheet * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}

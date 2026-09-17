@@ -1,0 +1,28 @@
+{
+  "clients": [
+    {
+      "id": "cpf-47456689881",
+      "nome": "PEDRO",
+      "cpf": "474.566.898-81",
+      "telefone": "(12) 31321-3132",
+      "email": "231343123",
+      "createdAt": "2026-09-08T14:35:17.196Z"
+    }
+  ],
+  "orders": [
+    {
+      "id": "ord-1788969130235-ys7xz",
+      "numero": 150001,
+      "clienteId": "cpf-47456689881",
+      "situacao": "Concluído",
+      "canal": "Presencial",
+      "entrada": "2026-09-09T15:51:00.000Z",
+      "saida": "2026-09-09T15:53:19.723Z",
+      "equipamento": "ps4",
+      "valor": 2300,
+      "createdAt": "2026-09-09T15:52:10.235Z"
+    }
+  ],
+  "maintenanceExpenses": [],
+  "nextOrderSeq": 150002
+}
