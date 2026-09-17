@@ -1,4 +1,21 @@
 import { Client, ServiceOrder, OrderStatus, MaintenanceExpense, AuthUser, ExpenseCategory } from '../types';
+import {
+  getSupabaseClients,
+  insertSupabaseClient,
+  updateSupabaseClient,
+  deleteSupabaseClient,
+  getSupabaseOrders,
+  insertSupabaseOrder,
+  updateSupabaseOrder,
+  deleteSupabaseOrder,
+  getSupabaseExpenses,
+  insertSupabaseExpense,
+  deleteSupabaseExpense,
+  getSupabaseNextOrderSeq,
+  incrementSupabaseOrderSeq,
+  isSupabaseConnected,
+} from '../db/supabase-repository';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 export interface ServerHealth {
   status: string;
@@ -88,12 +105,13 @@ export const api = {
       const clients = getLocalData<Client[]>(STORAGE_KEYS.CLIENTS, []);
       const expenses = getLocalData<MaintenanceExpense[]>(STORAGE_KEYS.EXPENSES, []);
       const seq = getLocalData<number>(STORAGE_KEYS.SEQ, 150001);
+      const isSbActive = isSupabaseConfigured();
 
       return {
         status: 'ok',
-        server: 'Netlify / Client Storage',
-        engine: 'Local / Supabase Mirror',
-        supabaseConnected: false,
+        server: 'Netlify / Client Cloud',
+        engine: isSbActive ? 'Supabase PostgreSQL Cloud' : 'Local Storage Cache',
+        supabaseConnected: isSbActive && isSupabaseConnected(),
         uptime: Math.floor(performance.now() / 1000),
         timestamp: new Date().toISOString(),
         database: {
@@ -110,6 +128,32 @@ export const api = {
     try {
       return await fetchJsonOrThrow<BootstrapResponse>(`${API_BASE}/bootstrap`);
     } catch (err) {
+      if (isSupabaseConfigured()) {
+        try {
+          const [clients, orders, expenses, nextSeq] = await Promise.all([
+            getSupabaseClients(),
+            getSupabaseOrders(),
+            getSupabaseExpenses(),
+            getSupabaseNextOrderSeq(),
+          ]);
+
+          setLocalData(STORAGE_KEYS.CLIENTS, clients);
+          setLocalData(STORAGE_KEYS.ORDERS, orders);
+          setLocalData(STORAGE_KEYS.EXPENSES, expenses);
+          setLocalData(STORAGE_KEYS.SEQ, nextSeq);
+
+          return {
+            clients,
+            orders,
+            maintenanceExpenses: expenses,
+            nextOrderSeq: nextSeq,
+            serverTime: new Date().toISOString(),
+          };
+        } catch (sbErr) {
+          console.warn('[API] Falha ao consultar Supabase diretamente, usando cache local:', sbErr);
+        }
+      }
+
       console.info('[API] Using local storage bootstrap (Netlify / Static CDN mode)');
       return {
         clients: getLocalData<Client[]>(STORAGE_KEYS.CLIENTS, []),
@@ -125,6 +169,15 @@ export const api = {
     try {
       return await fetchJsonOrThrow<Client[]>(`${API_BASE}/clients`);
     } catch {
+      if (isSupabaseConfigured()) {
+        try {
+          const sbClients = await getSupabaseClients();
+          if (sbClients && sbClients.length > 0) {
+            setLocalData(STORAGE_KEYS.CLIENTS, sbClients);
+            return sbClients;
+          }
+        } catch {}
+      }
       return getLocalData<Client[]>(STORAGE_KEYS.CLIENTS, []);
     }
   },
@@ -148,6 +201,14 @@ export const api = {
         obs: client.obs,
         createdAt: client.createdAt || new Date().toISOString(),
       };
+      if (isSupabaseConfigured()) {
+        try {
+          await insertSupabaseClient(newClient);
+        } catch (sbErr) {
+          console.warn('[API] Aviso ao gravar cliente no Supabase:', sbErr);
+        }
+      }
+
       const current = getLocalData<Client[]>(STORAGE_KEYS.CLIENTS, []);
       setLocalData(STORAGE_KEYS.CLIENTS, [newClient, ...current]);
       return newClient;
@@ -162,6 +223,14 @@ export const api = {
         body: JSON.stringify(client),
       });
     } catch {
+      if (isSupabaseConfigured()) {
+        try {
+          await updateSupabaseClient(id, client);
+        } catch (sbErr) {
+          console.warn('[API] Aviso ao atualizar cliente no Supabase:', sbErr);
+        }
+      }
+
       const current = getLocalData<Client[]>(STORAGE_KEYS.CLIENTS, []);
       const updatedList = current.map((c) => (c.id === id ? { ...c, ...client } : c));
       setLocalData(STORAGE_KEYS.CLIENTS, updatedList);
@@ -175,6 +244,14 @@ export const api = {
         method: 'DELETE',
       });
     } catch {
+      if (isSupabaseConfigured()) {
+        try {
+          await deleteSupabaseClient(id);
+        } catch (sbErr) {
+          console.warn('[API] Aviso ao deletar cliente no Supabase:', sbErr);
+        }
+      }
+
       const current = getLocalData<Client[]>(STORAGE_KEYS.CLIENTS, []);
       setLocalData(STORAGE_KEYS.CLIENTS, current.filter((c) => c.id !== id));
     }
@@ -184,6 +261,15 @@ export const api = {
     try {
       return await fetchJsonOrThrow<ServiceOrder[]>(`${API_BASE}/orders`);
     } catch {
+      if (isSupabaseConfigured()) {
+        try {
+          const sbOrders = await getSupabaseOrders();
+          if (sbOrders && sbOrders.length > 0) {
+            setLocalData(STORAGE_KEYS.ORDERS, sbOrders);
+            return sbOrders;
+          }
+        } catch {}
+      }
       return getLocalData<ServiceOrder[]>(STORAGE_KEYS.ORDERS, []);
     }
   },
@@ -207,17 +293,29 @@ export const api = {
         body: JSON.stringify(order),
       });
     } catch {
-      const orders = getLocalData<ServiceOrder[]>(STORAGE_KEYS.ORDERS, []);
-      const seq = getLocalData<number>(STORAGE_KEYS.SEQ, 150001);
+      let nextSeq = getLocalData<number>(STORAGE_KEYS.SEQ, 150001);
+      if (isSupabaseConfigured()) {
+        try {
+          nextSeq = await incrementSupabaseOrderSeq();
+        } catch {
+          nextSeq = nextSeq + 1;
+        }
+      } else {
+        nextSeq = nextSeq + 1;
+      }
+
       const newOrder: ServiceOrder = {
-        id: order.id || 'ord-' + Date.now().toString(36),
-        numero: order.numero || seq,
+        id: order.id || 'ord-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6),
+        numero: order.numero || nextSeq,
         clienteId: order.clienteId || '',
-        situacao: order.situacao || 'Em aberto',
+        situacao: (order.situacao as OrderStatus) || 'Em aberto',
         canal: order.canal || 'Presencial',
         entrada: order.entrada || new Date().toISOString(),
         saida: order.saida,
         prazo: order.prazo,
+        dataRetirada: order.dataRetirada,
+        dataRetorno: order.dataRetorno,
+        motivoRetorno: order.motivoRetorno,
         equipamento: order.equipamento || '',
         marca: order.marca,
         modelo: order.modelo,
@@ -225,12 +323,25 @@ export const api = {
         defeito: order.defeito,
         solucao: order.solucao,
         valor: order.valor ?? 0,
+        maoObra: order.maoObra,
+        pecas: order.pecas,
+        desconto: order.desconto,
         itens: order.itens,
         obs: order.obs,
         createdAt: order.createdAt || new Date().toISOString(),
       };
+
+      if (isSupabaseConfigured()) {
+        try {
+          await insertSupabaseOrder(newOrder);
+        } catch (sbErr) {
+          console.warn('[API] Aviso ao gravar ordem no Supabase:', sbErr);
+        }
+      }
+
+      const orders = getLocalData<ServiceOrder[]>(STORAGE_KEYS.ORDERS, []);
       setLocalData(STORAGE_KEYS.ORDERS, [newOrder, ...orders]);
-      setLocalData(STORAGE_KEYS.SEQ, Math.max(seq + 1, newOrder.numero + 1));
+      setLocalData(STORAGE_KEYS.SEQ, Math.max(nextSeq, newOrder.numero + 1));
       return newOrder;
     }
   },
@@ -243,6 +354,14 @@ export const api = {
         body: JSON.stringify(order),
       });
     } catch {
+      if (isSupabaseConfigured()) {
+        try {
+          await updateSupabaseOrder(id, order);
+        } catch (sbErr) {
+          console.warn('[API] Aviso ao atualizar ordem no Supabase:', sbErr);
+        }
+      }
+
       const orders = getLocalData<ServiceOrder[]>(STORAGE_KEYS.ORDERS, []);
       const updated = orders.map((o) => (o.id === id ? { ...o, ...order } : o));
       setLocalData(STORAGE_KEYS.ORDERS, updated);
@@ -258,6 +377,14 @@ export const api = {
         body: JSON.stringify({ situacao }),
       });
     } catch {
+      if (isSupabaseConfigured()) {
+        try {
+          await updateSupabaseOrder(id, { situacao });
+        } catch (sbErr) {
+          console.warn('[API] Aviso ao atualizar status da ordem no Supabase:', sbErr);
+        }
+      }
+
       const orders = getLocalData<ServiceOrder[]>(STORAGE_KEYS.ORDERS, []);
       const updated = orders.map((o) => (o.id === id ? { ...o, situacao } : o));
       setLocalData(STORAGE_KEYS.ORDERS, updated);
@@ -273,6 +400,14 @@ export const api = {
         body: JSON.stringify({ prazo }),
       });
     } catch {
+      if (isSupabaseConfigured()) {
+        try {
+          await updateSupabaseOrder(id, { prazo: prazo ?? undefined });
+        } catch (sbErr) {
+          console.warn('[API] Aviso ao atualizar prazo da ordem no Supabase:', sbErr);
+        }
+      }
+
       const orders = getLocalData<ServiceOrder[]>(STORAGE_KEYS.ORDERS, []);
       const updated = orders.map((o) => (o.id === id ? { ...o, prazo: prazo ?? undefined } : o));
       setLocalData(STORAGE_KEYS.ORDERS, updated);
@@ -288,8 +423,16 @@ export const api = {
         body: JSON.stringify({ dataRetirada }),
       });
     } catch {
+      if (isSupabaseConfigured()) {
+        try {
+          await updateSupabaseOrder(id, { dataRetirada: dataRetirada ?? undefined, saida: dataRetirada ?? undefined });
+        } catch (sbErr) {
+          console.warn('[API] Aviso ao atualizar retirada no Supabase:', sbErr);
+        }
+      }
+
       const orders = getLocalData<ServiceOrder[]>(STORAGE_KEYS.ORDERS, []);
-      const updated = orders.map((o) => (o.id === id ? { ...o, saida: dataRetirada ?? undefined } : o));
+      const updated = orders.map((o) => (o.id === id ? { ...o, saida: dataRetirada ?? undefined, dataRetirada: dataRetirada ?? undefined } : o));
       setLocalData(STORAGE_KEYS.ORDERS, updated);
       return updated.find((o) => o.id === id) as ServiceOrder;
     }
@@ -301,6 +444,14 @@ export const api = {
         method: 'DELETE',
       });
     } catch {
+      if (isSupabaseConfigured()) {
+        try {
+          await deleteSupabaseOrder(id);
+        } catch (sbErr) {
+          console.warn('[API] Aviso ao deletar ordem no Supabase:', sbErr);
+        }
+      }
+
       const orders = getLocalData<ServiceOrder[]>(STORAGE_KEYS.ORDERS, []);
       setLocalData(STORAGE_KEYS.ORDERS, orders.filter((o) => o.id !== id));
     }
@@ -311,6 +462,15 @@ export const api = {
     try {
       return await fetchJsonOrThrow<MaintenanceExpense[]>(`${API_BASE}/maintenance-expenses`);
     } catch {
+      if (isSupabaseConfigured()) {
+        try {
+          const sbExpenses = await getSupabaseExpenses();
+          if (sbExpenses && sbExpenses.length > 0) {
+            setLocalData(STORAGE_KEYS.EXPENSES, sbExpenses);
+            return sbExpenses;
+          }
+        } catch {}
+      }
       return getLocalData<MaintenanceExpense[]>(STORAGE_KEYS.EXPENSES, []);
     }
   },
@@ -323,7 +483,6 @@ export const api = {
         body: JSON.stringify(data),
       });
     } catch {
-      const expenses = getLocalData<MaintenanceExpense[]>(STORAGE_KEYS.EXPENSES, []);
       const todayIso = new Date().toISOString();
       const newExpense: MaintenanceExpense = {
         id: data.id || 'exp-' + Date.now().toString(36),
@@ -334,6 +493,16 @@ export const api = {
         data: data.data || todayIso.slice(0, 10),
         createdAt: data.createdAt || todayIso,
       };
+
+      if (isSupabaseConfigured()) {
+        try {
+          await insertSupabaseExpense(newExpense);
+        } catch (sbErr) {
+          console.warn('[API] Aviso ao gravar despesa no Supabase:', sbErr);
+        }
+      }
+
+      const expenses = getLocalData<MaintenanceExpense[]>(STORAGE_KEYS.EXPENSES, []);
       setLocalData(STORAGE_KEYS.EXPENSES, [newExpense, ...expenses]);
       return newExpense;
     }
@@ -345,6 +514,14 @@ export const api = {
         method: 'DELETE',
       });
     } catch {
+      if (isSupabaseConfigured()) {
+        try {
+          await deleteSupabaseExpense(id);
+        } catch (sbErr) {
+          console.warn('[API] Aviso ao deletar despesa no Supabase:', sbErr);
+        }
+      }
+
       const expenses = getLocalData<MaintenanceExpense[]>(STORAGE_KEYS.EXPENSES, []);
       setLocalData(STORAGE_KEYS.EXPENSES, expenses.filter((e) => e.id !== id));
     }

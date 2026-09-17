@@ -89,16 +89,40 @@ export function resetSupabaseClientToDefault(): void {
   }
 }
 
+function getSafeEnvVar(key: string): string | undefined {
+  // 1. Vite browser environment (Netlify, Vercel, client build)
+  try {
+    if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
+      const viteVal = (import.meta as any).env[key] || (import.meta as any).env[`VITE_${key}`];
+      if (viteVal && typeof viteVal === 'string') return viteVal;
+    }
+  } catch {
+    // ignore
+  }
+
+  // 2. Node.js environment (server.ts)
+  try {
+    if (typeof process !== 'undefined' && process.env) {
+      const nodeVal = process.env[key] || process.env[`VITE_${key}`];
+      if (nodeVal && typeof nodeVal === 'string') return nodeVal;
+    }
+  } catch {
+    // ignore
+  }
+
+  return undefined;
+}
+
 export function resolveSupabaseCredentials(): { url: string; key: string } | null {
-  // Try environment variables first
-  const envUrlCandidate = normalizeSupabaseUrl(process.env.SUPABASE_URL);
+  // Try environment variables first (checking both process.env and Vite import.meta.env)
+  const envUrlCandidate = normalizeSupabaseUrl(getSafeEnvVar('SUPABASE_URL'));
   
   const envKeyCandidate = [
-    cleanCandidateString(process.env.SUPABASE_PUBLISHABLE_KEY),
-    cleanCandidateString(process.env.SUPABASE_ANON_KEY),
-    cleanCandidateString(process.env.SUPABASE_KEY),
-    cleanCandidateString(process.env.SUPABASE_SERVICE_ROLE_KEY),
-    cleanCandidateString(process.env.SUPABASE_SECRET_KEY),
+    cleanCandidateString(getSafeEnvVar('SUPABASE_PUBLISHABLE_KEY')),
+    cleanCandidateString(getSafeEnvVar('SUPABASE_ANON_KEY')),
+    cleanCandidateString(getSafeEnvVar('SUPABASE_KEY')),
+    cleanCandidateString(getSafeEnvVar('SUPABASE_SERVICE_ROLE_KEY')),
+    cleanCandidateString(getSafeEnvVar('SUPABASE_SECRET_KEY')),
   ].find(isValidSupabaseKey);
 
   // If valid environment variables are present, use them
