@@ -33,7 +33,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
           e.stopPropagation();
           if (!isDark) onToggle('dark');
         }}
-        className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+        className={`inline-flex items-center justify-center gap-1 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
           variant === 'sidebar' ? 'flex-1' : ''
         } ${
           isDark
@@ -43,7 +43,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
         title="Ativar Tema Escuro"
       >
         <Moon className={`w-3.5 h-3.5 ${isDark ? 'text-white' : 'text-[#9CA3AF]'}`} />
-        <span>Escuro</span>
+        <span className={variant === 'header' ? 'hidden sm:inline' : ''}>Escuro</span>
       </button>
 
       {/* Botão Tema Claro */}
@@ -55,7 +55,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
           e.stopPropagation();
           if (isDark) onToggle('light');
         }}
-        className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+        className={`inline-flex items-center justify-center gap-1 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
           variant === 'sidebar' ? 'flex-1' : ''
         } ${
           !isDark
@@ -65,7 +65,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
         title="Ativar Tema Claro"
       >
         <Sun className={`w-3.5 h-3.5 ${!isDark ? 'text-black' : 'text-[#9CA3AF]'}`} />
-        <span>Claro</span>
+        <span className={variant === 'header' ? 'hidden sm:inline' : ''}>Claro</span>
       </button>
     </div>
   );

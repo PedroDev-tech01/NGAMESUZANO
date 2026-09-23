@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Client, ServiceOrder, ViewType, OrderStatus, MaintenanceExpense, AuthUser } from './types';
+import { Client, ServiceOrder, ViewType, OrderStatus, MaintenanceExpense, AuthUser, StatusHistoryEntry } from './types';
 import { INITIAL_CLIENTS, INITIAL_ORDERS } from './data/initialData';
 import { uid, onlyDigits } from './utils/formatters';
 import { api } from './services/api';
@@ -24,7 +24,7 @@ import { ThemeToggle } from './components/ThemeToggle';
 import { ReportsView } from './components/ReportsView';
 import { LoginView } from './components/LoginView';
 import { AnimatePresence, motion } from 'motion/react';
-import { Keyboard, Zap, Search, Server, Menu, LogOut } from 'lucide-react';
+import { Keyboard, Zap, Search, Server, Menu, LogOut, LayoutDashboard, FileText, PlusCircle, Users, BarChart3, Plus } from 'lucide-react';
 
 const STORAGE_KEYS = {
   CLIENTS: 'ngames_clients_v1',
@@ -40,6 +40,7 @@ export default function App() {
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [editingClientId, setEditingClientId] = useState<string | null>(null);
   const [printingOrder, setPrintingOrder] = useState<ServiceOrder | null>(null);
+  const [autoWhatsAppOnOpen, setAutoWhatsAppOnOpen] = useState(false);
   const [ordersStatusFilter, setOrdersStatusFilter] = useState<string>('');
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isServerModalOpen, setIsServerModalOpen] = useState(false);
@@ -332,8 +333,34 @@ export default function App() {
   // Inline Quick Status Update for orders
   const handleUpdateOrderStatus = async (orderId: string, newStatus: OrderStatus) => {
     const target = orders.find((o) => o.id === orderId);
+    if (!target || target.situacao === newStatus) return;
+
     const willBeFinished = newStatus === 'Concluído' && !target?.saida;
     const isReopening = newStatus === 'Retornou com defeito' || newStatus === 'Em aberto' || newStatus === 'Em andamento';
+    const nowIso = new Date().toISOString();
+
+    const newHistoryEntry: StatusHistoryEntry = {
+      id: uid(),
+      de: target.situacao,
+      para: newStatus,
+      data: nowIso,
+      observacao: newStatus === 'Concluído' ? 'Serviço concluído' : undefined,
+    };
+
+    const updatedHistory: StatusHistoryEntry[] = [
+      ...(target.historicoStatus && target.historicoStatus.length > 0
+        ? target.historicoStatus
+        : [
+            {
+              id: `init-${target.id}`,
+              de: 'Criada',
+              para: target.situacao,
+              data: target.entrada || target.createdAt || nowIso,
+              observacao: 'Abertura da O.S.',
+            },
+          ]),
+      newHistoryEntry,
+    ];
 
     // Optimistic UI update
     setOrders((prev) =>
@@ -342,8 +369,9 @@ export default function App() {
         return {
           ...o,
           situacao: newStatus,
-          saida: willBeFinished ? new Date().toISOString() : (isReopening ? undefined : o.saida),
-          retornoAt: newStatus === 'Retornou com defeito' ? (o.retornoAt || new Date().toISOString()) : o.retornoAt,
+          saida: willBeFinished ? nowIso : (isReopening ? undefined : o.saida),
+          retornoAt: newStatus === 'Retornou com defeito' ? (o.retornoAt || nowIso) : o.retornoAt,
+          historicoStatus: updatedHistory,
         };
       })
     );
@@ -352,7 +380,11 @@ export default function App() {
 
     // Sync to server
     try {
-      await api.updateOrderStatus(orderId, newStatus);
+      await api.updateOrderStatus(orderId, newStatus, {
+        historicoStatus: updatedHistory,
+        saida: willBeFinished ? nowIso : (isReopening ? undefined : target.saida),
+        retornoAt: newStatus === 'Retornou com defeito' ? (target.retornoAt || nowIso) : target.retornoAt,
+      });
       setIsServerOnline(true);
     } catch (err) {
       console.error('Failed to sync status change to server:', err);
@@ -389,6 +421,33 @@ export default function App() {
     const target = orders.find((o) => o.id === orderId);
     const nowIso = customDate !== undefined ? (customDate ? customDate : undefined) : new Date().toISOString();
 
+    const newHistoryEntry: StatusHistoryEntry = {
+      id: uid(),
+      de: target?.situacao || 'Concluído',
+      para: 'Concluído',
+      data: nowIso || new Date().toISOString(),
+      observacao: nowIso
+        ? 'Equipamento retirado pelo cliente (Garantia legal de 90 dias ativada)'
+        : 'Registro de retirada da O.S. desmarcado',
+    };
+
+    const updatedHistory: StatusHistoryEntry[] = [
+      ...(target?.historicoStatus && target.historicoStatus.length > 0
+        ? target.historicoStatus
+        : target
+        ? [
+            {
+              id: `init-${target.id}`,
+              de: 'Criada',
+              para: target.situacao,
+              data: target.entrada || target.createdAt || new Date().toISOString(),
+              observacao: 'Abertura da O.S.',
+            },
+          ]
+        : []),
+      newHistoryEntry,
+    ];
+
     // Optimistic UI update
     setOrders((prev) =>
       prev.map((o) => {
@@ -398,6 +457,7 @@ export default function App() {
           situacao: 'Concluído',
           saida: o.saida || nowIso || new Date().toISOString(),
           dataRetirada: nowIso,
+          historicoStatus: updatedHistory,
         };
       })
     );
@@ -411,6 +471,7 @@ export default function App() {
     // Sync to server
     try {
       await api.updateOrderRetirada(orderId, nowIso);
+      await api.updateOrder(orderId, { historicoStatus: updatedHistory });
       setIsServerOnline(true);
     } catch (err) {
       console.error('Failed to sync retirada to server:', err);
@@ -493,6 +554,12 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isShortcutsOpen, isServerModalOpen, printingOrder, confirmModal.isOpen]);
 
+  // Print & WhatsApp PDF for Order
+  const handlePrintOrder = (order: ServiceOrder, autoWhatsApp: boolean = false) => {
+    setAutoWhatsAppOnOpen(autoWhatsApp);
+    setPrintingOrder(order);
+  };
+
   // Edit Order
   const handleEditOrder = (orderId: string) => {
     setEditingOrderId(orderId);
@@ -501,24 +568,56 @@ export default function App() {
   };
 
   // Save Order
-  const handleSaveOrder = async (orderData: Partial<ServiceOrder>) => {
+  const handleSaveOrder = async (
+    orderData: Partial<ServiceOrder>,
+    nextAction: 'view' | 'whatsapp' | 'print' = 'view'
+  ) => {
+    let savedOrder: ServiceOrder | null = null;
+
     if (editingOrderId) {
+      const existing = orders.find((o) => o.id === editingOrderId);
+      let updatedHistory = existing?.historicoStatus || [];
+      if (existing && orderData.situacao && orderData.situacao !== existing.situacao) {
+        const newHistoryEntry: StatusHistoryEntry = {
+          id: uid(),
+          de: existing.situacao,
+          para: orderData.situacao,
+          data: new Date().toISOString(),
+          observacao: orderData.motivoRetorno || (orderData.situacao === 'Concluído' ? 'Serviço concluído' : undefined),
+        };
+        updatedHistory = [
+          ...(updatedHistory.length > 0
+            ? updatedHistory
+            : [
+                {
+                  id: `init-${existing.id}`,
+                  de: 'Criada',
+                  para: existing.situacao,
+                  data: existing.entrada || existing.createdAt || new Date().toISOString(),
+                  observacao: 'Abertura da O.S.',
+                },
+              ]),
+          newHistoryEntry,
+        ];
+        orderData.historicoStatus = updatedHistory;
+      }
+
+      savedOrder = {
+        ...(existing || {}),
+        ...orderData,
+        historicoStatus: updatedHistory.length > 0 ? updatedHistory : existing?.historicoStatus,
+        valor: orderData.valor !== undefined ? Number(orderData.valor) : (existing?.valor ?? 0),
+      } as ServiceOrder;
+
       // Optimistic update
       setOrders((prev) =>
-        prev.map((o) =>
-          o.id === editingOrderId
-            ? ({
-                ...o,
-                ...orderData,
-                valor: orderData.valor !== undefined ? Number(orderData.valor) : (o.valor ?? 0),
-              } as ServiceOrder)
-            : o
-        )
+        prev.map((o) => (o.id === editingOrderId ? savedOrder! : o))
       );
       showToast('Ordem de serviço atualizada com sucesso.');
 
       try {
         const updated = await api.updateOrder(editingOrderId, orderData);
+        savedOrder = updated;
         setOrders((prev) => prev.map((o) => (o.id === editingOrderId ? updated : o)));
         setIsServerOnline(true);
       } catch (err) {
@@ -527,6 +626,16 @@ export default function App() {
     } else {
       const clientTempNumber = nextOrderSeq;
       const exactCreationTime = new Date().toISOString();
+
+      const initialHistory: StatusHistoryEntry[] = [
+        {
+          id: uid(),
+          de: 'Criada',
+          para: orderData.situacao || 'Em aberto',
+          data: exactCreationTime,
+          observacao: 'Abertura da Ordem de Serviço',
+        },
+      ];
 
       // Optimistic create
       const newOrderLocal: ServiceOrder = {
@@ -547,15 +656,22 @@ export default function App() {
         obs: orderData.obs,
         createdAt: exactCreationTime,
         retornoAt: orderData.situacao === 'Retornou com defeito' ? exactCreationTime : undefined,
+        historicoStatus: initialHistory,
       };
 
+      savedOrder = newOrderLocal;
       setOrders((prev) => [newOrderLocal, ...prev]);
       setNextOrderSeq((prev) => prev + 1);
       showToast(`Ordem de serviço #${clientTempNumber} cadastrada!`);
 
       // Server create
       try {
-        const created = await api.createOrder({ ...orderData, entrada: exactCreationTime });
+        const created = await api.createOrder({
+          ...orderData,
+          entrada: exactCreationTime,
+          historicoStatus: initialHistory,
+        });
+        savedOrder = created;
         // Replace local optimistic item with server item
         setOrders((prev) => prev.map((o) => (o.id === newOrderLocal.id ? created : o)));
         setNextOrderSeq((prev) => Math.max(prev, created.numero + 1));
@@ -567,6 +683,14 @@ export default function App() {
 
     setEditingOrderId(null);
     setCurrentView('ordens');
+
+    if (savedOrder && nextAction === 'whatsapp') {
+      setAutoWhatsAppOnOpen(true);
+      setPrintingOrder(savedOrder);
+    } else if (savedOrder && nextAction === 'print') {
+      setAutoWhatsAppOnOpen(false);
+      setPrintingOrder(savedOrder);
+    }
   };
 
   // Delete Order Prompt
@@ -882,7 +1006,7 @@ export default function App() {
       {/* Main View Area with Top Quick Bar and Smooth Motion */}
       <div className="flex-1 flex flex-col min-w-0 w-full overflow-x-hidden">
         {/* Top Header Bar */}
-        <header className="h-14 border-b border-[#22252B] bg-[#0E1014]/90 backdrop-blur-md px-4 sm:px-6 md:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
+        <header className="h-14 border-b border-[#22252B] bg-[#0E1014]/90 backdrop-blur-md px-3 sm:px-6 md:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             {/* Mobile Menu Hamburger */}
             <button
@@ -899,10 +1023,10 @@ export default function App() {
             </span>
             <span className="text-[#374151] hidden sm:inline">/</span>
             <span className="text-xs font-bold text-white uppercase tracking-wider truncate">
-              {currentView === 'dashboard' && 'Painel de Controle'}
+              {currentView === 'dashboard' && 'Painel'}
               {currentView === 'ordens' && 'Ordens de Serviço'}
-              {currentView === 'os-form' && (editingOrderId ? 'Editar Ordem' : 'Nova Ordem')}
-              {currentView === 'clientes' && 'Lista de Clientes'}
+              {currentView === 'os-form' && (editingOrderId ? 'Editar O.S.' : 'Nova O.S.')}
+              {currentView === 'clientes' && 'Clientes'}
               {currentView === 'cliente-form' && (editingClientId ? 'Editar Cliente' : 'Novo Cliente')}
               {currentView === 'relatorios' && 'Gráficos & Fluxo'}
             </span>
@@ -951,7 +1075,7 @@ export default function App() {
         </header>
 
         {/* Content with 60fps AnimatePresence */}
-        <main className="flex-1 p-4 sm:p-6 md:p-8 max-w-[1240px] w-full mx-auto overflow-x-hidden">
+        <main className="flex-1 p-3.5 sm:p-6 md:p-8 pb-24 lg:pb-8 max-w-[1240px] w-full mx-auto overflow-x-hidden">
           <AnimatePresence mode="wait">
             <motion.div
               key={currentView}
@@ -966,7 +1090,7 @@ export default function App() {
                   clients={clients}
                   onNavigate={handleNavigate}
                   onEditOrder={handleEditOrder}
-                  onPrintOrder={(order) => setPrintingOrder(order)}
+                  onPrintOrder={(order) => handlePrintOrder(order)}
                   onFilterStatus={handleFilterStatus}
                   onUpdateOrderStatus={handleUpdateOrderStatus}
                   onOpenShortcuts={() => setIsShortcutsOpen(true)}
@@ -981,7 +1105,7 @@ export default function App() {
                   onNavigate={handleNavigate}
                   onEditOrder={handleEditOrder}
                   onDeleteOrder={handleDeleteOrderPrompt}
-                  onPrintOrder={(order) => setPrintingOrder(order)}
+                  onPrintOrder={(order, autoWhatsApp) => handlePrintOrder(order, autoWhatsApp)}
                   onUpdateOrderStatus={handleUpdateOrderStatus}
                   onUpdateOrderPrazo={handleUpdateOrderPrazo}
                   onUpdateOrderRetirada={handleUpdateOrderRetirada}
@@ -1043,7 +1167,7 @@ export default function App() {
                   expenses={maintenanceExpenses}
                   onNavigate={handleNavigate}
                   onEditOrder={(order) => handleEditOrder(order.id)}
-                  onPrintOrder={(order) => setPrintingOrder(order)}
+                  onPrintOrder={(order) => handlePrintOrder(order)}
                   onAddExpense={handleAddExpense}
                   onDeleteExpense={handleDeleteExpense}
                 />
@@ -1052,6 +1176,96 @@ export default function App() {
           </AnimatePresence>
         </main>
       </div>
+
+      {/* Mobile Bottom Navigation Bar (Smartphones & Tablets < lg) */}
+      <nav
+        id="mobile-bottom-nav"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#0A0D11]/95 backdrop-blur-md border-t border-[#22252B] safe-area-bottom px-2 py-1.5 shadow-[0_-4px_20px_rgba(0,0,0,0.5)] select-none transition-colors"
+      >
+        <div className="flex items-center justify-around max-w-lg mx-auto">
+          {/* 1. Painel */}
+          <button
+            type="button"
+            onClick={() => handleNavigate('dashboard')}
+            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-lg transition-colors cursor-pointer min-w-[56px] ${
+              currentView === 'dashboard'
+                ? 'text-[#E51D24] font-bold'
+                : 'text-[#9CA3AF] hover:text-white'
+            }`}
+          >
+            <LayoutDashboard className="w-4 h-4 mb-0.5" />
+            <span className="text-[10px] tracking-tight">Painel</span>
+          </button>
+
+          {/* 2. Ordens de Serviço */}
+          <button
+            type="button"
+            onClick={() => handleNavigate('ordens')}
+            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-lg transition-colors cursor-pointer min-w-[56px] relative ${
+              currentView === 'ordens'
+                ? 'text-[#E51D24] font-bold'
+                : 'text-[#9CA3AF] hover:text-white'
+            }`}
+          >
+            <div className="relative">
+              <FileText className="w-4 h-4 mb-0.5" />
+              {orders.length > 0 && (
+                <span className="absolute -top-1 -right-2 bg-[#E51D24] text-white text-[8.5px] font-mono font-bold px-1 rounded-full leading-tight">
+                  {orders.length > 99 ? '99+' : orders.length}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] tracking-tight">Ordens</span>
+          </button>
+
+          {/* 3. + Nova O.S. (Ação Central em Destaque) */}
+          <button
+            type="button"
+            onClick={() => {
+              setEditingOrderId(null);
+              handleNavigate('os-form');
+            }}
+            className="flex flex-col items-center justify-center -mt-4 group cursor-pointer"
+            title="Criar nova Ordem de Serviço"
+          >
+            <div className="w-11 h-11 rounded-full bg-[#E51D24] group-hover:bg-[#C81018] group-active:scale-95 text-white flex items-center justify-center shadow-[0_0_16px_rgba(229,29,36,0.6)] border-2 border-[#0A0D11] transition-transform">
+              <Plus className="w-6 h-6 stroke-[2.5]" />
+            </div>
+            <span className="text-[9.5px] font-bold text-white uppercase tracking-wider mt-0.5">
+              Nova O.S.
+            </span>
+          </button>
+
+          {/* 4. Clientes */}
+          <button
+            type="button"
+            onClick={() => handleNavigate('clientes')}
+            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-lg transition-colors cursor-pointer min-w-[56px] ${
+              currentView === 'clientes'
+                ? 'text-[#E51D24] font-bold'
+                : 'text-[#9CA3AF] hover:text-white'
+            }`}
+          >
+            <Users className="w-4 h-4 mb-0.5" />
+            <span className="text-[10px] tracking-tight">Clientes</span>
+          </button>
+
+          {/* 5. Relatórios & Gráficos */}
+          <button
+            type="button"
+            onClick={() => handleNavigate('relatorios')}
+            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-lg transition-colors cursor-pointer min-w-[56px] ${
+              currentView === 'relatorios'
+                ? 'text-[#E51D24] font-bold'
+                : 'text-[#9CA3AF] hover:text-white'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4 mb-0.5" />
+            <span className="text-[10px] tracking-tight">Gráficos</span>
+          </button>
+        </div>
+      </nav>
+
 
       {/* Confirmation Modal */}
       <ConfirmModal
@@ -1082,9 +1296,14 @@ export default function App() {
         order={printingOrder}
         client={printingOrder ? clients.find((c) => c.id === printingOrder.clienteId) || null : null}
         clients={clients}
-        onClose={() => setPrintingOrder(null)}
+        autoWhatsApp={autoWhatsAppOnOpen}
+        onClose={() => {
+          setPrintingOrder(null);
+          setAutoWhatsAppOnOpen(false);
+        }}
         onEdit={(orderId) => {
           setPrintingOrder(null);
+          setAutoWhatsAppOnOpen(false);
           handleEditOrder(orderId);
         }}
       />

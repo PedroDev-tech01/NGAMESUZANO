@@ -5,8 +5,20 @@ import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { INITIAL_CLIENTS, INITIAL_ORDERS } from './src/data/initialData';
 import { Client, ServiceOrder, OrderStatus, MaintenanceExpense } from './src/types';
-import { validateCPF, validatePhone, formatCPF, formatPhone, onlyDigits, formatCNPJ, validateCNPJ } from './src/utils/formatters';
+import {
+  validateCPF,
+  validatePhone,
+  formatCPF,
+  formatPhone,
+  onlyDigits,
+  formatCNPJ,
+  validateCNPJ,
+  formatCurrency,
+  formatDateTime,
+  getOrderValue,
+} from './src/utils/formatters';
 import { isSupabaseConfigured } from './src/lib/supabase';
+import { buildVectorOrderPdf } from './src/utils/vectorPdf';
 import {
   getSupabaseClients,
   insertSupabaseClient,
@@ -478,6 +490,66 @@ app.get('/api/orders/:id', async (req: Request, res: Response) => {
   res.json(order);
 });
 
+// Helper to safely escape HTML strings for server-rendered pages
+function escapeHtml(str?: any): string {
+  if (str === undefined || str === null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+async function findOrderAndClient(idOrNum: string) {
+  const clean = String(idOrNum).replace(/\.pdf$/i, '').trim();
+  let currentOrders = dbData.orders;
+  if (isSupabaseConfigured()) {
+    try {
+      currentOrders = await getSupabaseOrders();
+    } catch {}
+  }
+  const order = currentOrders.find((o) => o.id === clean || String(o.numero) === clean);
+  if (!order) return { order: null, client: null };
+
+  let currentClients = dbData.clients;
+  if (isSupabaseConfigured()) {
+    try {
+      currentClients = await getSupabaseClients();
+    } catch {}
+  }
+  const client = currentClients.find((c) => c.id === order.clienteId) || null;
+  return { order, client };
+}
+
+// Stream direct vector PDF for order viewing or download (/os/:idOrNum, /os/:idOrNum.pdf, or /api/orders/:id/pdf)
+app.get(['/os/:idOrNum', '/os/:idOrNum.pdf', '/api/orders/:id/pdf'], async (req: Request, res: Response) => {
+  try {
+    const idOrNum = req.params.idOrNum || req.params.id;
+    const { order, client } = await findOrderAndClient(idOrNum);
+    if (!order) {
+      return res.status(404).send('Ordem de serviço não encontrada');
+    }
+
+    const doc = buildVectorOrderPdf(order, client);
+    const pdfBuffer = Buffer.from(doc.output('arraybuffer'));
+    const safeFilename = `OS-${order.numero}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${safeFilename}"`);
+    res.send(pdfBuffer);
+  } catch (err: any) {
+    console.error('[PDF Server] Erro ao gerar PDF:', err);
+    res.status(500).send('Erro ao processar PDF da Ordem de Serviço');
+  }
+});
+
+// Friendly redirect for short order links: /ordem/:id -> /os/:id.pdf
+app.get('/ordem/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  res.redirect(`/os/${encodeURIComponent(id)}.pdf`);
+});
+
 app.post('/api/orders', async (req: Request, res: Response) => {
   try {
     const {
@@ -554,6 +626,15 @@ app.post('/api/orders', async (req: Request, res: Response) => {
       obs: obs ? String(obs).trim() : undefined,
       retornoAt: situacao === 'Retornou com defeito' ? (req.body.retornoAt || dataRetorno || new Date().toISOString()) : undefined,
       createdAt: new Date().toISOString(),
+      historicoStatus: req.body.historicoStatus || [
+        {
+          id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          de: 'Criada',
+          para: situacao || 'Em aberto',
+          data: entrada || new Date().toISOString(),
+          observacao: 'Abertura da Ordem de Serviço',
+        },
+      ],
     };
 
     if (isSupabaseConfigured()) {
@@ -599,6 +680,47 @@ app.put('/api/orders/:id', async (req: Request, res: Response) => {
       itens: req.body.itens !== undefined ? req.body.itens : existing.itens,
     };
 
+    // Registrar histórico de status se houve mudança de situação
+    if (req.body.situacao && req.body.situacao !== existing.situacao) {
+      const newEntry = {
+        id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        de: existing.situacao,
+        para: req.body.situacao,
+        data: new Date().toISOString(),
+        observacao: req.body.motivoRetorno || (req.body.situacao === 'Concluído' ? 'Serviço concluído' : undefined),
+      };
+      payload.historicoStatus = [
+        ...(Array.isArray(existing.historicoStatus) && existing.historicoStatus.length > 0
+          ? existing.historicoStatus
+          : [
+              {
+                id: `init-${existing.id}`,
+                de: 'Criada',
+                para: existing.situacao,
+                data: existing.entrada || existing.createdAt || new Date().toISOString(),
+                observacao: 'Abertura da O.S.',
+              },
+            ]),
+        newEntry,
+      ];
+    } else if (req.body.historicoStatus !== undefined) {
+      payload.historicoStatus = req.body.historicoStatus;
+    }
+
+    // Integridade do histórico: se a O.S. já estiver com status 'Concluído',
+    // desabilita/bloqueia a alteração de campos principais (equipamento, cliente, data de entrada)
+    if (existing.situacao === 'Concluído') {
+      payload.clienteId = existing.clienteId;
+      payload.entrada = existing.entrada;
+      payload.equipamento = existing.equipamento;
+      payload.marca = existing.marca;
+      payload.modelo = existing.modelo;
+      payload.serie = existing.serie;
+      if (Array.isArray(existing.itens) && existing.itens.length > 0) {
+        payload.itens = existing.itens;
+      }
+    }
+
     let updated = { ...existing, ...payload };
     if (isSupabaseConfigured()) {
       updated = await updateSupabaseOrder(id, payload);
@@ -641,13 +763,38 @@ app.patch('/api/orders/:id/status', async (req: Request, res: Response) => {
     const willBeFinished = situacao === 'Concluído' && !existing.saida;
     const isReopening = (situacao === 'Retornou com defeito' || situacao === 'Em aberto' || situacao === 'Em andamento');
     const isRetorno = situacao === 'Retornou com defeito';
+    const nowIso = new Date().toISOString();
+
+    const newHistoryEntry = {
+      id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      de: existing.situacao,
+      para: situacao as OrderStatus,
+      data: nowIso,
+      observacao: situacao === 'Concluído' ? 'Serviço concluído' : undefined,
+    };
+
+    const updatedHistory = req.body.historicoStatus || [
+      ...(Array.isArray(existing.historicoStatus) && existing.historicoStatus.length > 0
+        ? existing.historicoStatus
+        : [
+            {
+              id: `init-${existing.id}`,
+              de: 'Criada',
+              para: existing.situacao,
+              data: existing.entrada || existing.createdAt || nowIso,
+              observacao: 'Abertura da O.S.',
+            },
+          ]),
+      newHistoryEntry,
+    ];
 
     const patchPayload: Partial<ServiceOrder> = {
       situacao: situacao as OrderStatus,
-      saida: willBeFinished ? new Date().toISOString() : (isReopening ? undefined : existing.saida),
+      saida: willBeFinished ? nowIso : (isReopening ? undefined : existing.saida),
       retornoAt: isRetorno
-        ? (req.body.retornoAt || existing.retornoAt || new Date().toISOString())
+        ? (req.body.retornoAt || existing.retornoAt || nowIso)
         : existing.retornoAt,
+      historicoStatus: updatedHistory,
     };
 
     let updated = { ...existing, ...patchPayload };

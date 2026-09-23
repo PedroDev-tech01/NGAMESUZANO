@@ -324,3 +324,30 @@ html.theme-light body,
     print-color-adjust: exact !important;
   }
 }
+
+/* ==========================================================================
+   MOBILE & RESPONSIVE TOUCH UTILITIES
+   ========================================================================== */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.touch-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+.safe-area-bottom {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+}
+
+/* Light theme support for mobile navigation bar */
+.theme-light #mobile-bottom-nav {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+  border-color: #E2E8F0 !important;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
+}
+

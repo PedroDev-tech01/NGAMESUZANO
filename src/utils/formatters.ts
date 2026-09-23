@@ -273,10 +273,44 @@ export function createWhatsAppLink(phone: string, message: string): string {
   return `https://api.whatsapp.com/send?phone=${fullNumber}&text=${encodeURIComponent(message)}`;
 }
 
-export function buildOrderWhatsAppMessage(order: { numero: number; equipamento: string; modelo?: string; situacao: string; valor?: number; maoObra?: number; pecas?: number }, clientName?: string): string {
+export function buildOrderWhatsAppMessage(
+  order: {
+    numero: number;
+    equipamento: string;
+    modelo?: string;
+    situacao: string;
+    valor?: number;
+    maoObra?: number;
+    pecas?: number;
+    defeito?: string;
+    solucao?: string;
+  },
+  clientName?: string
+): string {
   const total = getOrderValue(order);
   const formattedVal = formatCurrency(total);
-  return `Olá${clientName ? ` ${clientName}` : ''}! Aqui é da *N! GAMES* 🎮\n\nAtualização sobre sua Ordem de Serviço *#${order.numero}*:\n🕹️ *Equipamento:* ${order.equipamento}${order.modelo ? ` (${order.modelo})` : ''}\n📌 *Status:* ${order.situacao}\n💰 *Valor Total:* ${formattedVal}\n\nQualquer dúvida, estamos à disposição! 🚀`;
+  const name = clientName ? clientName.trim() : 'Cliente';
+  const equip = `${order.equipamento || 'Equipamento'}${order.modelo ? ` (${order.modelo})` : ''}`;
+
+  const lines: string[] = [
+    `Olá, *${name}*! Tudo bem? Aqui é da *N! GAMES Assistência Técnica* 🎮\n`,
+    `📄 *ORDEM DE SERVIÇO Nº ${order.numero}*`,
+    `• *Equipamento:* ${equip}`,
+    `• *Situação:* ${order.situacao}`,
+  ];
+
+  if (order.defeito && order.defeito.trim()) {
+    lines.push(`• *Defeito:* ${order.defeito.trim()}`);
+  }
+  if (order.solucao && order.solucao.trim()) {
+    lines.push(`• *Serviço:* ${order.solucao.trim()}`);
+  }
+
+  lines.push(`• *Valor Total:* ${formattedVal}`);
+  lines.push(`\n📎 *Segue em anexo o documento oficial da sua Ordem de Serviço.*`);
+  lines.push(`Qualquer dúvida ou informação, estamos à disposição! 🚀`);
+
+  return lines.join('\n');
 }
 
 export interface PrazoInfo {

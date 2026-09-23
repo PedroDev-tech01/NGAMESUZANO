@@ -439,81 +439,81 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
         {/* Card 1: Quanto Entrou */}
-        <div className="bg-[#14171C] p-5 rounded-xl border border-[#22262E] shadow-sm relative overflow-hidden">
+        <div className="bg-[#14171C] p-3.5 sm:p-5 rounded-xl border border-[#22262E] shadow-sm relative overflow-hidden">
           <div className="absolute top-0 right-0 w-24 h-24 bg-[#10B981]/5 rounded-bl-full pointer-events-none" />
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#10B981] flex items-center gap-1.5">
-              <ArrowDownLeft className="w-4 h-4" />
-              Total que Entrou
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[#10B981] flex items-center gap-1.5">
+              <ArrowDownLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span>Total Entrou</span>
             </span>
-            <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-[#10B981]/15 text-[#34D399] border border-[#10B981]/30">
-              {totals.totalQtdEntradas} {totals.totalQtdEntradas === 1 ? 'O.S. recebida' : 'O.S. recebidas'}
+            <span className="text-[10px] sm:text-[11px] font-mono font-semibold px-1.5 sm:px-2 py-0.5 rounded-full bg-[#10B981]/15 text-[#34D399] border border-[#10B981]/30 self-start sm:self-auto">
+              {totals.totalQtdEntradas} O.S.
             </span>
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold font-mono text-white tracking-tight">
+          <div className="mt-2 sm:mt-3">
+            <div className="text-xl sm:text-2xl font-bold font-mono text-white tracking-tight">
               {formatCurrency(totals.totalEntradas)}
             </div>
-            <p className="text-[11px] text-[#9CA3AF] mt-1">
-              Faturamento registrado em novas ordens no período
+            <p className="text-[10px] sm:text-[11px] text-[#9CA3AF] mt-1 truncate">
+              Faturamento no período
             </p>
           </div>
         </div>
 
         {/* Card 2: Quanto Saiu */}
-        <div className="bg-[#14171C] p-5 rounded-xl border border-[#22262E] shadow-sm relative overflow-hidden">
+        <div className="bg-[#14171C] p-3.5 sm:p-5 rounded-xl border border-[#22262E] shadow-sm relative overflow-hidden">
           <div className="absolute top-0 right-0 w-24 h-24 bg-[#E51D24]/5 rounded-bl-full pointer-events-none" />
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#E51D24] flex items-center gap-1.5">
-              <ArrowUpRight className="w-4 h-4" />
-              Total que Saiu
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[#E51D24] flex items-center gap-1.5">
+              <ArrowUpRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span>Total Saiu</span>
             </span>
-            <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-[#E51D24]/15 text-[#FF6B6B] border border-[#E51D24]/30">
-              {totals.totalQtdSaidas} {totals.totalQtdSaidas === 1 ? 'O.S. finalizada' : 'O.S. finalizadas'}
+            <span className="text-[10px] sm:text-[11px] font-mono font-semibold px-1.5 sm:px-2 py-0.5 rounded-full bg-[#E51D24]/15 text-[#FF6B6B] border border-[#E51D24]/30 self-start sm:self-auto">
+              {totals.totalQtdSaidas} O.S.
             </span>
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold font-mono text-white tracking-tight">
+          <div className="mt-2 sm:mt-3">
+            <div className="text-xl sm:text-2xl font-bold font-mono text-white tracking-tight">
               {formatCurrency(totals.totalSaidas)}
             </div>
-            <p className="text-[11px] text-[#9CA3AF] mt-1">
-              Equipamentos finalizados e entregues ao cliente
+            <p className="text-[10px] sm:text-[11px] text-[#9CA3AF] mt-1 truncate">
+              Entregues ao cliente
             </p>
           </div>
         </div>
 
         {/* Card 3: Custo Geral em Manutenções */}
-        <div className="bg-[#14171C] p-5 rounded-xl border border-[#22262E] shadow-sm relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-              <Wrench className="w-4 h-4" />
-              Custos em Manutenções
+        <div className="bg-[#14171C] p-3.5 sm:p-5 rounded-xl border border-[#22262E] shadow-sm relative overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+              <Wrench className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span>Custos Bancada</span>
             </span>
-            <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+            <span className="text-[10px] sm:text-[11px] font-mono font-semibold px-1.5 sm:px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 self-start sm:self-auto">
               Geral &amp; Peças
             </span>
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold font-mono text-amber-400 tracking-tight">
+          <div className="mt-2 sm:mt-3">
+            <div className="text-xl sm:text-2xl font-bold font-mono text-amber-400 tracking-tight">
               {formatCurrency(totals.totalPecas + totals.totalCustoGeralManutencao)}
             </div>
-            <p className="text-[11px] text-[#9CA3AF] mt-1">
-              {formatCurrency(totals.totalCustoGeralManutencao)} em insumos + {formatCurrency(totals.totalPecas)} em peças
+            <p className="text-[10px] sm:text-[11px] text-[#9CA3AF] mt-1 truncate">
+              {formatCurrency(totals.totalCustoGeralManutencao)} em insumos
             </p>
           </div>
         </div>
 
         {/* Card 4: Saldo Líquido Real */}
-        <div className="bg-[#14171C] p-5 rounded-xl border border-[#22262E] shadow-sm relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#9CA3AF] flex items-center gap-1.5">
-              <Scale className="w-4 h-4 text-[#10B981]" />
-              Saldo Líquido Real
+        <div className="bg-[#14171C] p-3.5 sm:p-5 rounded-xl border border-[#22262E] shadow-sm relative overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[#9CA3AF] flex items-center gap-1.5">
+              <Scale className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#10B981] shrink-0" />
+              <span>Saldo Líquido</span>
             </span>
             <span
-              className={`text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full border ${
+              className={`text-[10px] sm:text-[11px] font-mono font-semibold px-1.5 sm:px-2 py-0.5 rounded-full border self-start sm:self-auto ${
                 totals.saldoPeriodo >= 0
                   ? 'bg-[#10B981]/15 text-[#34D399] border-[#10B981]/30'
                   : 'bg-[#EF4444]/15 text-[#F87171] border-[#EF4444]/30'
@@ -522,16 +522,16 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               {totals.saldoPeriodo >= 0 ? '+ Positivo' : '- Déficit'}
             </span>
           </div>
-          <div className="mt-3">
+          <div className="mt-2 sm:mt-3">
             <div
-              className={`text-2xl font-bold font-mono tracking-tight ${
+              className={`text-xl sm:text-2xl font-bold font-mono tracking-tight ${
                 totals.saldoPeriodo >= 0 ? 'text-[#34D399]' : 'text-[#F87171]'
               }`}
             >
               {formatCurrency(totals.saldoPeriodo)}
             </div>
-            <p className="text-[11px] text-[#9CA3AF] mt-1">
-              Entradas deduzidos todos os custos de bancada e peças
+            <p className="text-[10px] sm:text-[11px] text-[#9CA3AF] mt-1 truncate">
+              Líquido deduzido custos
             </p>
           </div>
         </div>

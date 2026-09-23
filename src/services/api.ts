@@ -369,24 +369,28 @@ export const api = {
     }
   },
 
-  async updateOrderStatus(id: string, situacao: OrderStatus): Promise<ServiceOrder> {
+  async updateOrderStatus(
+    id: string,
+    situacao: OrderStatus,
+    extra?: { historicoStatus?: any[]; saida?: string; retornoAt?: string }
+  ): Promise<ServiceOrder> {
     try {
       return await fetchJsonOrThrow<ServiceOrder>(`${API_BASE}/orders/${encodeURIComponent(id)}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ situacao }),
+        body: JSON.stringify({ situacao, ...extra }),
       });
     } catch {
       if (isSupabaseConfigured()) {
         try {
-          await updateSupabaseOrder(id, { situacao });
+          await updateSupabaseOrder(id, { situacao, ...extra });
         } catch (sbErr) {
           console.warn('[API] Aviso ao atualizar status da ordem no Supabase:', sbErr);
         }
       }
 
       const orders = getLocalData<ServiceOrder[]>(STORAGE_KEYS.ORDERS, []);
-      const updated = orders.map((o) => (o.id === id ? { ...o, situacao } : o));
+      const updated = orders.map((o) => (o.id === id ? { ...o, situacao, ...extra } : o));
       setLocalData(STORAGE_KEYS.ORDERS, updated);
       return updated.find((o) => o.id === id) as ServiceOrder;
     }

@@ -31,6 +31,15 @@ export interface OrderItem {
   valor?: number;
 }
 
+export interface StatusHistoryEntry {
+  id: string;
+  de: string; // Ex: 'Criada', 'Em aberto', 'Em andamento', etc.
+  para: OrderStatus; // Ex: 'Em andamento', 'Concluído', etc.
+  data: string; // ISO string da mudança de status
+  usuario?: string;
+  observacao?: string;
+}
+
 export interface ServiceOrder {
   id: string;
   numero: number;
@@ -58,6 +67,7 @@ export interface ServiceOrder {
   obs?: string;
   createdAt: string;
   retornoAt?: string;
+  historicoStatus?: StatusHistoryEntry[]; // Log histórico das alterações de status da O.S.
 }
 
 export type ExpenseCategory =

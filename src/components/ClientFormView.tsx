@@ -266,7 +266,7 @@ export const ClientFormView: React.FC<ClientFormViewProps> = ({
         </p>
       </div>
 
-      <div className="bg-[#14171C] border border-[#22262E] rounded-lg p-6 shadow-md">
+      <div className="bg-[#14171C] border border-[#22262E] rounded-lg p-4 sm:p-6 shadow-md">
         <form id="cliente-form" onSubmit={handleSubmit} noValidate className="space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             
@@ -458,22 +458,22 @@ export const ClientFormView: React.FC<ClientFormViewProps> = ({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-[#22262E]">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 pt-4 border-t border-[#22262E]">
             {/* Botão de Ir direto para a O.S. com o cadastro na tela */}
             <button
               type="button"
               onClick={() => executeSave(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#E51D24] hover:bg-[#C81018] text-white text-[13px] font-bold uppercase tracking-wider rounded transition-all shadow-[0_0_15px_rgba(229,29,36,0.35)] cursor-pointer"
+              className="inline-flex items-center justify-center gap-2 px-5 py-3 sm:py-2.5 bg-[#E51D24] hover:bg-[#C81018] text-white text-[13px] font-bold uppercase tracking-wider rounded transition-all shadow-[0_0_15px_rgba(229,29,36,0.35)] cursor-pointer text-center"
               title="Salva o cliente e abre imediatamente a Ordem de Serviço já com ele selecionado"
             >
-              <Sparkles className="w-4 h-4 text-white" />
-              <span>Salvar e Ir para Ordem de Serviço</span>
-              <ArrowRight className="w-4 h-4" />
+              <Sparkles className="w-4 h-4 text-white shrink-0" />
+              <span>Salvar e Ir para O.S.</span>
+              <ArrowRight className="w-4 h-4 shrink-0" />
             </button>
 
             <button
               type="submit"
-              className="px-4 py-2.5 bg-[#1F242D] hover:bg-[#282E3A] border border-[#374151] text-white text-[13px] font-semibold rounded transition-colors cursor-pointer"
+              className="px-4 py-3 sm:py-2.5 bg-[#1F242D] hover:bg-[#282E3A] border border-[#374151] text-white text-[13px] font-semibold rounded transition-colors cursor-pointer text-center"
             >
               ✓ Salvar Apenas Cliente
             </button>
@@ -481,7 +481,7 @@ export const ClientFormView: React.FC<ClientFormViewProps> = ({
             <button
               type="button"
               onClick={() => onNavigate('clientes')}
-              className="px-4 py-2.5 border border-transparent rounded bg-transparent text-[#9CA3AF] hover:text-white text-[13px] font-medium transition-colors cursor-pointer"
+              className="px-4 py-2.5 border border-transparent rounded bg-transparent text-[#9CA3AF] hover:text-white text-[13px] font-medium transition-colors cursor-pointer text-center"
             >
               Cancelar
             </button>

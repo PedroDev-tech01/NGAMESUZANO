@@ -122,11 +122,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
           {onOpenShortcuts && (
             <button
               onClick={onOpenShortcuts}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-[#14171C] hover:bg-[#1C2028] border border-[#22262E] text-[#9CA3AF] hover:text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+              className="hidden md:inline-flex items-center gap-1.5 px-3 py-2 bg-[#14171C] hover:bg-[#1C2028] border border-[#22262E] text-[#9CA3AF] hover:text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer shrink-0"
               title="Ver atalhos do teclado"
             >
               <span className="font-mono text-[10px] bg-white/10 px-1.5 py-0.5 rounded">Atalhos (?)</span>
@@ -135,24 +135,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <button
             onClick={() => onNavigate('relatorios')}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#14171C] hover:bg-[#1C2028] border border-[#374151] text-white text-xs font-bold uppercase tracking-wider rounded-lg transition-colors cursor-pointer"
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-[#14171C] hover:bg-[#1C2028] border border-[#374151] text-white text-xs font-bold uppercase tracking-wider rounded-lg transition-colors cursor-pointer flex-1 sm:flex-initial"
             title="Abrir área de gráficos e fluxo mensal"
           >
             <BarChart3 className="w-3.5 h-3.5 text-[#10B981]" />
-            <span>Gráficos &amp; Fluxo</span>
+            <span className="truncate">Gráficos</span>
           </button>
 
           <button
             onClick={() => onNavigate('cliente-form')}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#14171C] hover:bg-[#1C2028] border border-[#374151] text-white text-xs font-bold uppercase tracking-wider rounded-lg transition-colors cursor-pointer"
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-[#14171C] hover:bg-[#1C2028] border border-[#374151] text-white text-xs font-bold uppercase tracking-wider rounded-lg transition-colors cursor-pointer flex-1 sm:flex-initial"
           >
             <Users className="w-3.5 h-3.5" />
-            <span>+ Cliente</span>
+            <span className="truncate">+ Cliente</span>
           </button>
 
           <button
             onClick={() => onNavigate('os-form')}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[#E51D24] hover:bg-[#C81018] text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-[0_0_14px_rgba(229,29,36,0.35)] hover:shadow-[0_0_20px_rgba(229,29,36,0.5)] transition-all cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#E51D24] hover:bg-[#C81018] text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-[0_0_14px_rgba(229,29,36,0.35)] hover:shadow-[0_0_20px_rgba(229,29,36,0.5)] transition-all cursor-pointer w-full sm:w-auto"
           >
             <PlusCircle className="w-4 h-4" />
             <span>Nova Ordem</span>
@@ -161,27 +161,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* Interactive Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2.5 sm:gap-3.5">
         {/* Card 1: Em aberto */}
         <motion.div
           whileHover={{ y: -3, scale: 1.01 }}
           whileTap={{ scale: 0.99 }}
           onClick={() => handleCardClick('Em aberto')}
-          className="bg-[#14171C] border border-[#22262E] rounded-xl p-4.5 relative overflow-hidden group hover:border-[#E51D24] transition-all cursor-pointer shadow-md hover:shadow-xl"
+          className="bg-[#14171C] border border-[#22262E] rounded-xl p-3 sm:p-4.5 relative overflow-hidden group hover:border-[#E51D24] transition-all cursor-pointer shadow-md hover:shadow-xl"
         >
           <div className="absolute top-0 left-0 w-1.5 h-full bg-[#E51D24]"></div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-xs text-[#D1D5DB] font-medium">
               <AlertCircle className="w-3.5 h-3.5 text-[#E51D24]" />
-              <span>Em aberto</span>
+              <span className="truncate">Em aberto</span>
             </div>
-            <ArrowUpRight className="w-4 h-4 text-[#9CA3AF] group-hover:text-[#E51D24] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            <ArrowUpRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#9CA3AF] group-hover:text-[#E51D24] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform shrink-0" />
           </div>
-          <div id="stat-abertas" className="font-mono text-3xl font-extrabold text-[#E51D24] mt-2">
+          <div id="stat-abertas" className="font-mono text-2xl sm:text-3xl font-extrabold text-[#E51D24] mt-2">
             {abertasCount}
           </div>
-          <div className="text-[11px] text-[#9CA3AF] mt-2 flex items-center gap-1">
-            <span className="text-[#E51D24] font-semibold">Clique para filtrar</span> as pendentes
+          <div className="text-[10px] sm:text-[11px] text-[#9CA3AF] mt-1 sm:mt-2 truncate">
+            <span className="text-[#E51D24] font-semibold">Pendentes</span> na fila
           </div>
         </motion.div>
 
@@ -190,20 +190,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           whileHover={{ y: -3, scale: 1.01 }}
           whileTap={{ scale: 0.99 }}
           onClick={() => handleCardClick('Em andamento')}
-          className="bg-[#14171C] border border-[#22262E] rounded-xl p-4.5 relative overflow-hidden group hover:border-white transition-all cursor-pointer shadow-md hover:shadow-xl"
+          className="bg-[#14171C] border border-[#22262E] rounded-xl p-3 sm:p-4.5 relative overflow-hidden group hover:border-white transition-all cursor-pointer shadow-md hover:shadow-xl"
         >
           <div className="absolute top-0 left-0 w-1.5 h-full bg-white"></div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-xs text-[#D1D5DB] font-medium">
               <Clock className="w-3.5 h-3.5 text-white" />
-              <span>Em andamento</span>
+              <span className="truncate">Em andamento</span>
             </div>
-            <ArrowUpRight className="w-4 h-4 text-[#9CA3AF] group-hover:text-white group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            <ArrowUpRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#9CA3AF] group-hover:text-white group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform shrink-0" />
           </div>
-          <div id="stat-andamento" className="font-mono text-3xl font-extrabold text-white mt-2">
+          <div id="stat-andamento" className="font-mono text-2xl sm:text-3xl font-extrabold text-white mt-2">
             {andamentoCount}
           </div>
-          <div className="text-[11px] text-[#9CA3AF] mt-2 flex items-center gap-1">
+          <div className="text-[10px] sm:text-[11px] text-[#9CA3AF] mt-1 sm:mt-2 truncate">
             <span className="text-white font-semibold">Na bancada</span> em reparo
           </div>
         </motion.div>
@@ -213,21 +213,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           whileHover={{ y: -3, scale: 1.01 }}
           whileTap={{ scale: 0.99 }}
           onClick={() => handleCardClick('Concluído')}
-          className="bg-[#14171C] border border-[#22262E] rounded-xl p-4.5 relative overflow-hidden group hover:border-emerald-500/70 transition-all cursor-pointer shadow-md hover:shadow-xl"
+          className="bg-[#14171C] border border-[#22262E] rounded-xl p-3 sm:p-4.5 relative overflow-hidden group hover:border-emerald-500/70 transition-all cursor-pointer shadow-md hover:shadow-xl"
         >
           <div className="absolute top-0 left-0 w-1.5 h-full bg-[#10B981]"></div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-xs text-[#D1D5DB] font-medium">
               <CheckCircle2 className="w-3.5 h-3.5 text-[#10B981]" />
-              <span>Concluídas no mês</span>
+              <span className="truncate">Concluídas (Mês)</span>
             </div>
-            <ArrowUpRight className="w-4 h-4 text-[#9CA3AF] group-hover:text-[#10B981] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            <ArrowUpRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#9CA3AF] group-hover:text-[#10B981] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform shrink-0" />
           </div>
-          <div id="stat-concluidas" className="font-mono text-3xl font-extrabold text-[#10B981] mt-2">
+          <div id="stat-concluidas" className="font-mono text-2xl sm:text-3xl font-extrabold text-[#10B981] mt-2">
             {concluidasMesCount}
           </div>
-          <div className="text-[11px] text-[#9CA3AF] mt-2 flex items-center gap-1">
-            <span className="text-[#10B981] font-semibold">Finalizadas no mês</span>
+          <div className="text-[10px] sm:text-[11px] text-[#9CA3AF] mt-1 sm:mt-2 truncate">
+            <span className="text-[#10B981] font-semibold">Finalizadas</span> no mês
           </div>
         </motion.div>
 
@@ -242,17 +242,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           }}
           className={`bg-[#14171C] border ${
             retornosMesCount > 0 ? 'border-[#F43F5E]/50 hover:border-[#F43F5E]' : 'border-[#22262E] hover:border-[#F43F5E]/50'
-          } rounded-xl p-4.5 relative overflow-hidden group transition-all cursor-pointer shadow-md hover:shadow-xl`}
+          } rounded-xl p-3 sm:p-4.5 relative overflow-hidden group transition-all cursor-pointer shadow-md hover:shadow-xl`}
         >
           <div className="absolute top-0 left-0 w-1.5 h-full bg-[#F43F5E]"></div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-xs text-[#D1D5DB] font-medium">
               <RotateCcw className="w-3.5 h-3.5 text-[#F43F5E]" />
-              <span>Retornos no mês</span>
+              <span className="truncate">Retornos (Mês)</span>
             </div>
-            <ArrowUpRight className="w-4 h-4 text-[#9CA3AF] group-hover:text-[#F43F5E] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            <ArrowUpRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#9CA3AF] group-hover:text-[#F43F5E] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform shrink-0" />
           </div>
-          <div id="stat-retornos-mes" className="font-mono text-3xl font-extrabold text-[#F43F5E] mt-2 flex items-baseline gap-2">
+          <div id="stat-retornos-mes" className="font-mono text-2xl sm:text-3xl font-extrabold text-[#F43F5E] mt-2 flex items-baseline gap-1.5">
             <span>{retornosMesCount}</span>
             {retornosMesCount > 0 && (
               <span className="text-[10px] font-sans font-bold px-1.5 py-0.5 rounded bg-[#F43F5E]/20 text-[#FDA4AF] border border-[#F43F5E]/40">
@@ -260,8 +260,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </span>
             )}
           </div>
-          <div className="text-[11px] text-[#9CA3AF] mt-2 flex items-center gap-1">
-            <span className="text-[#F43F5E] font-semibold">Clique para filtrar</span> as ordens
+          <div className="text-[10px] sm:text-[11px] text-[#9CA3AF] mt-1 sm:mt-2 truncate">
+            <span className="text-[#F43F5E] font-semibold">Clique para filtrar</span>
           </div>
         </motion.div>
 
@@ -270,7 +270,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           whileHover={{ y: -3, scale: 1.01 }}
           whileTap={{ scale: 0.99 }}
           onClick={() => onNavigate('clientes')}
-          className="bg-[#14171C] border border-[#22262E] rounded-xl p-4.5 relative overflow-hidden group hover:border-[#E51D24] transition-all cursor-pointer shadow-md hover:shadow-xl"
+          className="col-span-2 sm:col-span-1 bg-[#14171C] border border-[#22262E] rounded-xl p-3 sm:p-4.5 relative overflow-hidden group hover:border-[#E51D24] transition-all cursor-pointer shadow-md hover:shadow-xl"
         >
           <div className="absolute top-0 left-0 w-1.5 h-full bg-[#E51D24]"></div>
           <div className="flex items-center justify-between">
@@ -278,12 +278,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <Users className="w-3.5 h-3.5 text-[#E51D24]" />
               <span>Clientes cadastrados</span>
             </div>
-            <ArrowUpRight className="w-4 h-4 text-[#9CA3AF] group-hover:text-[#E51D24] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            <ArrowUpRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#9CA3AF] group-hover:text-[#E51D24] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform shrink-0" />
           </div>
-          <div id="stat-clientes" className="font-mono text-3xl font-extrabold text-[#E51D24] mt-2">
+          <div id="stat-clientes" className="font-mono text-2xl sm:text-3xl font-extrabold text-[#E51D24] mt-2">
             {clientsCount}
           </div>
-          <div className="text-[11px] text-[#9CA3AF] mt-2 flex items-center gap-1">
+          <div className="text-[10px] sm:text-[11px] text-[#9CA3AF] mt-1 sm:mt-2">
             <span className="text-[#E51D24] font-semibold">Ver agenda completa</span>
           </div>
         </motion.div>
@@ -495,7 +495,144 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </p>
             </div>
           ) : (
-            <table className="w-full text-left border-collapse">
+            <>
+              {/* Mobile Orders Card List (Visible on mobile/tablet portrait < md) */}
+              <div className="md:hidden divide-y divide-[#22262E]">
+                {displayedTableOrders.map((order) => {
+                  const client = clients.find((c) => c.id === order.clienteId);
+                  const total = getOrderValue(order);
+                  const badge = getStatusBadgeStyle(order.situacao);
+                  const prazoInfo = getPrazoInfo(order.prazo, order.situacao);
+                  const whatsappLink =
+                    client?.telefone
+                      ? createWhatsAppLink(
+                          client.telefone,
+                          buildOrderWhatsAppMessage(order, client.nome)
+                        )
+                      : null;
+
+                  return (
+                    <div
+                      key={order.id}
+                      onClick={() => onPrintOrder(order)}
+                      className="p-3.5 sm:p-4 hover:bg-[#181C23] active:bg-[#1C2028] transition-colors cursor-pointer space-y-2.5"
+                    >
+                      {/* Top: Order #, Status and Price */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-black text-sm text-[#E51D24]">
+                            #{order.numero}
+                          </span>
+                          <span className="text-[11px] text-[#9CA3AF]">
+                            {formatDateTime(order.entrada)}
+                          </span>
+                        </div>
+                        <span className="font-mono font-black text-sm text-[#10B981]">
+                          {formatCurrency(total)}
+                        </span>
+                      </div>
+
+                      {/* Equipment and Client */}
+                      <div>
+                        <div className="font-bold text-[14px] text-white">
+                          {order.equipamento}
+                        </div>
+                        <div className="text-xs text-[#9CA3AF] flex items-center gap-1.5 mt-0.5">
+                          <span className="text-white font-medium">
+                            {client ? client.nome : '(cliente removido)'}
+                          </span>
+                          {(order.marca || order.modelo) && (
+                            <>
+                              <span>•</span>
+                              <span>{[order.marca, order.modelo].filter(Boolean).join(' ')}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Prazo and Status */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono font-medium border ${prazoInfo.badgeStyle.bg} ${prazoInfo.badgeStyle.text} ${prazoInfo.badgeStyle.border}`}
+                        >
+                          <Clock className={`w-3 h-3 ${prazoInfo.isUrgent ? 'animate-pulse text-[#EF4444]' : ''}`} />
+                          <span>{prazoInfo.label}</span>
+                        </span>
+
+                        <div onClick={(e) => e.stopPropagation()}>
+                          {onUpdateOrderStatus ? (
+                            <select
+                              value={order.situacao}
+                              onChange={(e) =>
+                                onUpdateOrderStatus(order.id, e.target.value as OrderStatus)
+                              }
+                              className={`text-[11px] font-bold px-2.5 py-1 rounded-lg font-mono border cursor-pointer ${badge.bg} ${badge.text} ${badge.border} focus:outline-none`}
+                            >
+                              <option value="Aguardando Análise">Aguardando Análise</option>
+                              <option value="Em Manutenção">Em Manutenção</option>
+                              <option value="Aguardando Peça">Aguardando Peça</option>
+                              <option value="Aguardando Retirada">Aguardando Retirada</option>
+                              <option value="Concluído">Concluído</option>
+                              <option value="Sem Reparo">Sem Reparo</option>
+                              <option value="Retornou com defeito">Retornou com defeito</option>
+                              <option value="Em aberto">Em aberto</option>
+                              <option value="Em andamento">Em andamento</option>
+                              <option value="Aguardando aprovação">Aguardando aprovação</option>
+                              <option value="Aprovado">Aprovado</option>
+                              <option value="Cancelado">Cancelado</option>
+                              <option value="Entregue">Entregue</option>
+                            </select>
+                          ) : (
+                            <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${badge.bg} ${badge.text}`}>
+                              {order.situacao}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div
+                        className="flex items-center justify-between gap-2 pt-2 border-t border-[#1C2028]"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {whatsappLink ? (
+                          <a
+                            href={whatsappLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-[#25D366]/20 text-[#25D366] border border-[#25D366]/40 cursor-pointer"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            <span>WhatsApp</span>
+                          </a>
+                        ) : <div />}
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onPrintOrder(order)}
+                            className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-[#E51D24] hover:bg-[#C81018] text-white cursor-pointer shadow-xs"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                            <span>Imprimir</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onEditOrder(order.id)}
+                            className="p-1.5 rounded-lg border border-[#374151] text-[#D1D5DB] hover:text-white cursor-pointer"
+                            title="Editar O.S."
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop Table View (Hidden on mobile < md) */}
+              <table className="hidden md:table w-full text-left border-collapse">
               <thead>
                 <tr className="bg-[#101216] border-b border-[#22262E] text-[11px] uppercase tracking-wider text-[#9CA3AF] font-bold">
                   <th className="py-3 px-4">Nº</th>
@@ -644,9 +781,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 })}
               </tbody>
             </table>
-          )}
-        </div>
+          </>
+        )}
       </div>
+    </div>
     </div>
   );
 };

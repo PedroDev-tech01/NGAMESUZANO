@@ -35,11 +35,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside
-      className={`w-64 shrink-0 bg-[#000000] text-[#FFFFFF] flex flex-col py-5 select-none h-screen sticky top-0 border-r border-[#22252B] z-40 transition-transform duration-200 lg:translate-x-0 ${
-        isOpenMobile
-          ? 'fixed inset-y-0 left-0 translate-x-0 shadow-2xl'
-          : 'fixed inset-y-0 left-0 -translate-x-full lg:sticky'
-      }`}
+      className={`
+        bg-[#000000] text-[#FFFFFF] py-5 select-none border-r border-[#22252B]
+        lg:sticky lg:top-0 lg:h-screen lg:w-64 lg:shrink-0 lg:flex lg:flex-col lg:z-30 lg:translate-x-0
+        ${
+          isOpenMobile
+            ? 'fixed inset-y-0 left-0 z-50 w-72 flex flex-col shadow-2xl transition-transform duration-200 translate-x-0'
+            : 'hidden lg:flex'
+        }
+      `}
     >
       {/* Brand Header with Official Logo & Mobile Close */}
       <div className="px-5 pb-5 border-b border-[#22252B] mb-3 flex items-start justify-between">

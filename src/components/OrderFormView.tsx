@@ -41,14 +41,18 @@ import {
   Phone,
   ExternalLink,
   ShieldCheck,
+  MessageCircle,
+  Printer,
+  Lock,
 } from 'lucide-react';
+import { OrderStatusTimeline } from './OrderStatusTimeline';
 
 interface OrderFormViewProps {
   editingOrder: ServiceOrder | null;
   clients: Client[];
   nextOrderSeq: number;
   initialClientId?: string | null;
-  onSave: (orderData: Partial<ServiceOrder>) => void;
+  onSave: (orderData: Partial<ServiceOrder>, nextAction?: 'view' | 'whatsapp' | 'print') => void;
   onNavigate: (view: ViewType) => void;
   onGoToNewClient?: () => void;
   onCreateClient?: (clientData: Partial<Client>) => Promise<Client> | Client;
@@ -171,6 +175,8 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
 
   // Feedback & errors
   const [formError, setFormError] = useState<string | null>(null);
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const [quickAttemptedSubmit, setQuickAttemptedSubmit] = useState(false);
 
   // Live ticking clock for real-time automatic entrada timestamp display
   const [liveNow, setLiveNow] = useState<Date>(new Date());
@@ -413,13 +419,14 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
   // Submit quick inline client
   const handleCreateQuickClient = async (e: React.FormEvent) => {
     e.preventDefault();
+    setQuickAttemptedSubmit(true);
     setQuickError(null);
 
     const cpfDigits = onlyDigits(quickCpf);
     const phoneDigits = onlyDigits(quickTelefone);
 
     if (cpfDigits.length !== 11) {
-      setQuickError('O CPF precisa ter 11 dígitos.');
+      setQuickError('O CPF é obrigatório e precisa ter 11 dígitos.');
       return;
     }
 
@@ -428,11 +435,12 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
     if (existingClient) {
       setIsInlineClientModalOpen(false);
       handleSelectClient(existingClient);
+      setQuickAttemptedSubmit(false);
       return;
     }
 
     if (phoneDigits.length < 10) {
-      setQuickError('Informe um telefone válido com DDD.');
+      setQuickError('Informe um WhatsApp / Telefone válido com DDD (mínimo 10 dígitos).');
       return;
     }
 
@@ -473,6 +481,7 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
       }
 
       setIsInlineClientModalOpen(false);
+      setQuickAttemptedSubmit(false);
       // Jogar já o cliente na tela e ir para a ordem de serviço
       handleSelectClient(created);
     } catch (err: any) {
@@ -493,25 +502,91 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
     }
   };
 
+  const isEditing = !!editingOrder;
+  const isOrderCompleted = Boolean(editingOrder && editingOrder.situacao === 'Concluído');
+  const statusBadge = getStatusBadgeStyle(situacao);
+
+  // Dynamic Validation States (marcar em vermelho campos obrigatórios antes do salvamento)
+  const isClientMissing = !isOrderCompleted && !selectedClientId;
+  const missingEquipmentIndices = isOrderCompleted
+    ? []
+    : itens
+        .map((item, idx) => (!item.equipamento || !item.equipamento.trim() ? idx : -1))
+        .filter((idx) => idx !== -1);
+  const isValorTotalInvalid = valorTotal.trim() === '' || isNaN(Number(valorTotal)) || Number(valorTotal) < 0;
+  const isDataRetornoMissing = situacao === 'Retornou com defeito' && !dataRetorno;
+
+  interface FormValidationError {
+    fieldId: string;
+    label: string;
+    message: string;
+  }
+
+  const activeErrors: FormValidationError[] = [];
+  if (isClientMissing) {
+    activeErrors.push({
+      fieldId: 'os-client-section',
+      label: 'Cliente da O.S.',
+      message: 'Selecione ou cadastre o cliente para esta Ordem de Serviço',
+    });
+  }
+  missingEquipmentIndices.forEach((idx) => {
+    activeErrors.push({
+      fieldId: `os-item-${idx}-equipamento`,
+      label: `Equipamento (Item #${idx + 1})`,
+      message: `Informe o nome do equipamento a ser atendido no Item #${idx + 1}`,
+    });
+  });
+  if (isValorTotalInvalid) {
+    activeErrors.push({
+      fieldId: 'os-valor-total',
+      label: 'Valor Total do Serviço',
+      message: 'Informe um valor numérico válido (digite 0 caso seja orçamento pendente)',
+    });
+  }
+  if (isDataRetornoMissing) {
+    activeErrors.push({
+      fieldId: 'os-data-retorno',
+      label: 'Data de Retorno',
+      message: 'Informe a data do retorno da garantia para status "Retornou com defeito"',
+    });
+  }
+
+  const scrollToField = (fieldId: string) => {
+    const el = document.getElementById(fieldId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') {
+        (el as HTMLElement).focus();
+      } else {
+        const input = el.querySelector('input, textarea, select') as HTMLElement | null;
+        input?.focus();
+      }
+    }
+  };
+
+  // Limpa erro global automaticamente quando todas as pendências forem sanadas
+  useEffect(() => {
+    if (attemptedSubmit && activeErrors.length === 0 && formError) {
+      setFormError(null);
+    }
+  }, [attemptedSubmit, activeErrors.length, formError]);
+
   // Submit Order Form
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = (e?: React.FormEvent, requestedAction: 'view' | 'whatsapp' | 'print' = 'view') => {
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+    }
+    setAttemptedSubmit(true);
+
+    if (activeErrors.length > 0) {
+      setFormError('Existem campos obrigatórios destacados em vermelho. Preencha-os antes de salvar a O.S.');
+      scrollToField(activeErrors[0].fieldId);
+      return;
+    }
     setFormError(null);
 
-    if (!selectedClientId) {
-      setFormError('Selecione ou cadastre o cliente para esta Ordem de Serviço.');
-      clientSearchInputRef.current?.focus();
-      return;
-    }
-
-    // Primary item validation
     const primaryItem = itens[0];
-    if (!primaryItem || !primaryItem.equipamento.trim()) {
-      setFormError('Informe o equipamento principal a ser atendido.');
-      firstEquipmentRef.current?.focus();
-      return;
-    }
-
     const finalVal = parseFloat(valorTotal) || 0;
 
     const orderPayload: Partial<ServiceOrder> = {
@@ -552,11 +627,23 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
       desconto: undefined,
     };
 
-    onSave(orderPayload);
-  };
+    // Mecanismo de integridade do histórico:
+    // Se a O.S. já estava Concluída, impede qualquer sobrescrita acidental
+    // dos campos principais (equipamento, itens cadastrados, cliente e data de entrada)
+    if (editingOrder && editingOrder.situacao === 'Concluído') {
+      orderPayload.clienteId = editingOrder.clienteId;
+      orderPayload.entrada = editingOrder.entrada;
+      orderPayload.equipamento = editingOrder.equipamento;
+      orderPayload.marca = editingOrder.marca;
+      orderPayload.modelo = editingOrder.modelo;
+      orderPayload.serie = editingOrder.serie;
+      if (Array.isArray(editingOrder.itens) && editingOrder.itens.length > 0) {
+        orderPayload.itens = editingOrder.itens;
+      }
+    }
 
-  const isEditing = !!editingOrder;
-  const statusBadge = getStatusBadgeStyle(situacao);
+    onSave(orderPayload, requestedAction);
+  };
 
   return (
     <div id="view-os-form" className="space-y-6 max-w-4xl pb-16">
@@ -571,7 +658,9 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
           </div>
           <p className="text-[13px] text-[#9CA3AF] mt-0.5">
             {isEditing
-              ? 'Atualize os dados técnicos, múltiplos itens e datas de atendimento.'
+              ? isOrderCompleted
+                ? 'Ordem de serviço concluída · Campos principais travados para integridade do histórico.'
+                : 'Atualize os dados técnicos, múltiplos itens e datas de atendimento.'
               : `Sequência automática O.S. #${nextOrderSeq} · Manutenção especializada de consoles e controles.`}
           </p>
         </div>
@@ -595,7 +684,66 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
         </div>
       </div>
 
-      {formError && (
+      {isOrderCompleted && (
+        <div id="os-completed-lock-banner" className="p-3.5 bg-amber-950/25 border border-amber-500/40 rounded-lg text-amber-200 flex items-start gap-3 shadow-md">
+          <div className="p-1.5 bg-amber-500/20 rounded border border-amber-500/30 text-amber-400 shrink-0 mt-0.5">
+            <Lock className="w-4 h-4" />
+          </div>
+          <div className="space-y-1 text-xs">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-sm text-amber-300">
+                Ordem de Serviço Concluída · Edição Restrita
+              </span>
+              <span className="px-1.5 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded text-[10px] font-mono uppercase font-bold text-amber-300">
+                Histórico Protegido
+              </span>
+            </div>
+            <p className="text-amber-200/90 leading-relaxed">
+              Para preservar a integridade do histórico e a auditoria técnica, a alteração dos campos principais (<strong>Cliente</strong>, <strong>Equipamento</strong> e <strong>Data de Entrada</strong>) está desabilitada nesta O.S. já concluída.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Resumo visual de validação em caso de campos obrigatórios não preenchidos */}
+      {attemptedSubmit && activeErrors.length > 0 && (
+        <motion.div
+          id="os-validation-alert"
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 bg-red-950/40 border-2 border-red-500 rounded-lg text-red-200 shadow-xl space-y-2.5"
+        >
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 font-bold text-sm text-red-300">
+              <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+              <span>Atenção: A Ordem de Serviço não pode ser salva com campos obrigatórios vazios</span>
+            </div>
+            <span className="text-xs bg-red-500/20 text-red-300 border border-red-500/40 px-2 py-0.5 rounded font-mono font-bold">
+              {activeErrors.length} {activeErrors.length === 1 ? 'campo pendente' : 'campos pendentes'}
+            </span>
+          </div>
+          <p className="text-xs text-red-200/90 leading-relaxed">
+            Para garantir a segurança das operações e a integridade do sistema, preencha os campos destacados em vermelho abaixo:
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+            {activeErrors.map((err, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => scrollToField(err.fieldId)}
+                className="flex items-center justify-between gap-2 text-left text-xs bg-red-900/30 hover:bg-red-900/50 border border-red-700/60 p-2.5 rounded text-red-200 hover:text-white transition-colors cursor-pointer group"
+              >
+                <span className="font-semibold truncate">
+                  <span className="text-red-400 font-mono font-bold mr-1">[{err.label}]</span> {err.message}
+                </span>
+                <ArrowRight className="w-3.5 h-3.5 text-red-400 group-hover:translate-x-1 transition-transform shrink-0" />
+              </button>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {formError && (!attemptedSubmit || activeErrors.length === 0) && (
         <div className="p-3.5 bg-red-900/30 border border-red-700/60 rounded-lg text-xs font-semibold text-red-200 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 text-[#EF4444] shrink-0" />
           <span>{formError}</span>
@@ -605,16 +753,32 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
       <form id="os-form" onSubmit={handleSubmit} noValidate className="space-y-6">
         
         {/* SECTION 1: SELEÇÃO / CADASTRO DE CLIENTE */}
-        <div className="bg-[#14171C] border border-[#22262E] rounded-lg p-5 shadow-md space-y-4">
+        <div
+          id="os-client-section"
+          className={`rounded-lg p-5 shadow-md space-y-4 transition-all ${
+            attemptedSubmit && isClientMissing
+              ? 'bg-[#191215] border-2 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.25)] ring-1 ring-red-500/30'
+              : 'bg-[#14171C] border border-[#22262E]'
+          }`}
+        >
           <div className="flex items-center justify-between border-b border-[#22262E] pb-3">
-            <div className="flex items-center gap-2 text-white font-bold text-sm">
-              <Users className="w-4 h-4 text-[#E51D24]" />
+            <div className="flex items-center gap-2 text-white font-bold text-sm flex-wrap">
+              <Users className={`w-4 h-4 ${attemptedSubmit && isClientMissing ? 'text-red-500 animate-pulse' : 'text-[#E51D24]'}`} />
               <span>Cliente da Ordem de Serviço</span>
+              <span className="text-[#E51D24] font-extrabold">*</span>
+              {attemptedSubmit && isClientMissing && (
+                <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-red-500/20 text-red-300 border border-red-500/50 flex items-center gap-1 animate-pulse">
+                  <AlertCircle className="w-3 h-3" />
+                  Obrigatório não selecionado
+                </span>
+              )}
             </div>
 
             <button
               type="button"
+              disabled={isOrderCompleted}
               onClick={() => {
+                if (isOrderCompleted) return;
                 setQuickCep('');
                 setQuickNome('');
                 setQuickCpf('');
@@ -623,11 +787,19 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
                 setQuickNumero('');
                 setQuickError(null);
                 setQuickCepMsg(null);
+                setQuickAttemptedSubmit(false);
                 setIsInlineClientModalOpen(true);
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#1F242D] hover:bg-[#2A313E] text-white rounded text-xs font-semibold border border-[#374151] transition-colors cursor-pointer"
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold border transition-colors ${
+                isOrderCompleted
+                  ? 'bg-[#181C23] text-gray-500 border-[#2A303C] cursor-not-allowed opacity-60'
+                  : attemptedSubmit && isClientMissing
+                    ? 'bg-red-950/40 hover:bg-red-900/50 text-red-200 border-red-500/70 cursor-pointer shadow-[0_0_12px_rgba(239,68,68,0.2)]'
+                    : 'bg-[#1F242D] hover:bg-[#2A313E] text-white border-[#374151] cursor-pointer'
+              }`}
+              title={isOrderCompleted ? 'Edição de cliente desabilitada para O.S. Concluída' : '+ Cadastrar Cliente Rápido'}
             >
-              <UserPlus className="w-3.5 h-3.5 text-[#E51D24]" />
+              {isOrderCompleted ? <Lock className="w-3.5 h-3.5 text-amber-400" /> : <UserPlus className="w-3.5 h-3.5 text-[#E51D24]" />}
               <span>+ Cadastrar Cliente Rápido</span>
             </button>
           </div>
@@ -642,10 +814,17 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/40 rounded text-[10.5px] font-bold font-mono uppercase tracking-wider flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" />
-                      Cliente Selecionado
-                    </span>
+                    {isOrderCompleted ? (
+                      <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded text-[10.5px] font-bold font-mono uppercase tracking-wider flex items-center gap-1">
+                        <Lock className="w-3 h-3" />
+                        Cliente Bloqueado (O.S. Concluída)
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/40 rounded text-[10.5px] font-bold font-mono uppercase tracking-wider flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" />
+                        Cliente Selecionado
+                      </span>
+                    )}
                     <span className="text-[11px] text-[#9CA3AF]">
                       Código: #{selectedClient.id.slice(-6)}
                     </span>
@@ -689,23 +868,31 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
                 <div className="shrink-0 flex items-center gap-2">
                   <button
                     type="button"
+                    disabled={isOrderCompleted}
                     onClick={() => {
+                      if (isOrderCompleted) return;
                       setSelectedClientId('');
                       setIsClientDropdownOpen(true);
                       setTimeout(() => clientSearchInputRef.current?.focus(), 100);
                     }}
-                    className="px-3 py-1.5 bg-[#22262E] hover:bg-[#2D333D] text-[#D1D5DB] hover:text-white rounded text-xs font-semibold transition-colors cursor-pointer border border-[#374151]"
+                    className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors border ${
+                      isOrderCompleted
+                        ? 'bg-[#14171C] text-gray-500 border-[#2A303C] cursor-not-allowed opacity-60'
+                        : 'bg-[#22262E] hover:bg-[#2D333D] text-[#D1D5DB] hover:text-white cursor-pointer border-[#374151]'
+                    }`}
+                    title={isOrderCompleted ? 'Não é possível trocar o cliente de uma O.S. já Concluída' : 'Trocar Cliente'}
                   >
-                    Trocar Cliente
+                    {isOrderCompleted ? 'Cliente Travado' : 'Trocar Cliente'}
                   </button>
                 </div>
               </div>
             </motion.div>
           ) : (
-            <div ref={clientDropdownContainerRef} className="relative">
+            <div ref={clientDropdownContainerRef} className="relative space-y-1.5">
               <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-medium text-[#D1D5DB]">
+                <label className={`block text-xs font-medium ${attemptedSubmit && isClientMissing ? 'text-red-400 font-bold' : 'text-[#D1D5DB]'}`}>
                   Buscar cliente existente (por Nome, CPF, Telefone ou CEP)
+                  {attemptedSubmit && isClientMissing && <span className="ml-1 text-red-400 font-bold">*</span>}
                 </label>
                 {isClientDropdownOpen && (
                   <button
@@ -719,13 +906,19 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
                 )}
               </div>
               <div className="relative">
-                <Search className="w-4 h-4 text-[#9CA3AF] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Search className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none ${attemptedSubmit && isClientMissing ? 'text-red-400' : 'text-[#9CA3AF]'}`} />
                 <input
                   ref={clientSearchInputRef}
                   type="text"
+                  id="os-client-search-input"
+                  aria-invalid={attemptedSubmit && isClientMissing}
+                  disabled={isOrderCompleted}
                   value={clientSearchTerm}
-                  onFocus={() => setIsClientDropdownOpen(true)}
+                  onFocus={() => {
+                    if (!isOrderCompleted) setIsClientDropdownOpen(true);
+                  }}
                   onChange={(e) => {
+                    if (isOrderCompleted) return;
                     setClientSearchTerm(e.target.value);
                     setIsClientDropdownOpen(true);
                   }}
@@ -735,7 +928,13 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
                     }
                   }}
                   placeholder="Comece a digitar o nome, CPF, telefone ou CEP do cliente..."
-                  className="w-full pl-9 pr-10 py-2.5 bg-[#101216] border border-[#374151] rounded text-sm text-white placeholder-[#6B7280] focus:outline-none focus:border-[#E51D24] focus:ring-2 focus:ring-[#E51D24]/20"
+                  className={`w-full pl-9 pr-10 py-2.5 rounded text-sm placeholder-[#6B7280] border transition-colors ${
+                    isOrderCompleted
+                      ? 'bg-[#14171C] text-gray-400 border-[#2A303C] cursor-not-allowed opacity-80'
+                      : attemptedSubmit && isClientMissing
+                        ? 'bg-red-950/20 border-2 border-red-500 text-white placeholder-red-300/60 focus:outline-none focus:ring-2 focus:ring-red-500/30'
+                        : 'bg-[#101216] text-white border-[#374151] focus:outline-none focus:border-[#E51D24] focus:ring-2 focus:ring-[#E51D24]/20'
+                  }`}
                 />
                 {clientSearchTerm && (
                   <button
@@ -751,6 +950,17 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
                   </button>
                 )}
               </div>
+
+              {attemptedSubmit && isClientMissing && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-2.5 bg-red-950/50 border border-red-500/70 rounded-md flex items-center gap-2 text-xs text-red-300 font-semibold"
+                >
+                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                  <span>Campo obrigatório: Selecione um cliente na busca ou clique no botão <strong>"+ Cadastrar Cliente Rápido"</strong> acima para criar e vincular na hora.</span>
+                </motion.div>
+              )}
 
               {/* Dropdown Results */}
               {isClientDropdownOpen && (
@@ -830,40 +1040,66 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
                 <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-[#1F242D] text-[#9CA3AF] border border-[#374151]">
                   {itens.length} {itens.length === 1 ? 'item' : 'itens'}
                 </span>
+                {isOrderCompleted && (
+                  <span className="px-2 py-0.5 rounded text-[10.5px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
+                    <Lock className="w-3 h-3" />
+                    Equipamentos Bloqueados
+                  </span>
+                )}
               </div>
               <p className="text-xs text-[#9CA3AF] mt-0.5">
-                Adicione consoles, controles, fontes ou jogos para a mesma ordem de serviço.
+                {isOrderCompleted
+                  ? 'Os dados de identificação dos equipamentos estão bloqueados nesta O.S. concluída.'
+                  : 'Adicione consoles, controles, fontes ou jogos para a mesma ordem de serviço.'}
               </p>
             </div>
 
             {/* BOTÃO DE ADICIONAR MAIS UM ITEM PRA MANUTENÇÃO JUNTO AO OUTRO */}
             <button
               type="button"
-              onClick={handleAddItem}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#E51D24] hover:bg-[#C81018] text-white rounded text-xs font-bold uppercase tracking-wider transition-all shadow-[0_0_12px_rgba(229,29,36,0.3)] cursor-pointer"
+              disabled={isOrderCompleted}
+              onClick={isOrderCompleted ? undefined : handleAddItem}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider transition-all ${
+                isOrderCompleted
+                  ? 'bg-[#1F242D] text-gray-500 border border-[#2A303C] cursor-not-allowed opacity-60'
+                  : 'bg-[#E51D24] hover:bg-[#C81018] text-white shadow-[0_0_12px_rgba(229,29,36,0.3)] cursor-pointer'
+              }`}
+              title={isOrderCompleted ? 'Não é possível adicionar equipamentos a uma O.S. já Concluída' : '+ Adicionar Mais Um Item'}
             >
-              <Plus className="w-4 h-4" />
+              {isOrderCompleted ? <Lock className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
               <span>+ Adicionar Mais Um Item</span>
             </button>
           </div>
 
           <div className="space-y-4">
-            {itens.map((item, idx) => (
+            {itens.map((item, idx) => {
+              const isItemEquipmentMissing = attemptedSubmit && (!item.equipamento || !item.equipamento.trim()) && !isOrderCompleted;
+              return (
               <div
                 key={item.id || idx}
-                className="bg-[#101216] border border-[#22262E] rounded-lg p-4 space-y-3.5 relative"
+                className={`rounded-lg p-4 space-y-3.5 relative transition-all ${
+                  isItemEquipmentMissing
+                    ? 'bg-[#181215] border-2 border-red-500 shadow-[0_0_18px_rgba(239,68,68,0.2)] ring-1 ring-red-500/30'
+                    : 'bg-[#101216] border border-[#22262E]'
+                }`}
               >
                 <div className="flex items-center justify-between border-b border-[#1F242D] pb-2">
                   <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-[#E51D24] text-white font-mono text-xs font-bold flex items-center justify-center">
+                    <span className={`w-5 h-5 rounded-full text-white font-mono text-xs font-bold flex items-center justify-center ${isItemEquipmentMissing ? 'bg-red-500' : 'bg-[#E51D24]'}`}>
                       {idx + 1}
                     </span>
                     <span className="font-bold text-xs text-white uppercase tracking-wider">
                       Item #{idx + 1}
                     </span>
+                    {isItemEquipmentMissing && (
+                      <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-red-500/20 text-red-300 border border-red-500/50 flex items-center gap-1 animate-pulse">
+                        <AlertCircle className="w-3 h-3" />
+                        Equipamento Obrigatório
+                      </span>
+                    )}
                   </div>
 
-                  {itens.length > 1 && (
+                  {itens.length > 1 && !isOrderCompleted && (
                     <button
                       type="button"
                       onClick={() => handleRemoveItem(idx)}
@@ -882,8 +1118,15 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
                     <button
                       key={eq}
                       type="button"
-                      onClick={() => handleUpdateItem(idx, 'equipamento', eq)}
-                      className="text-[11px] px-2 py-0.5 rounded bg-[#181C23] hover:bg-[#252C38] text-[#D1D5DB] border border-[#2A303C] transition-colors cursor-pointer"
+                      disabled={isOrderCompleted}
+                      onClick={() => !isOrderCompleted && handleUpdateItem(idx, 'equipamento', eq)}
+                      className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${
+                        isOrderCompleted
+                          ? 'bg-[#14171C] text-gray-500 border-[#22262E] cursor-not-allowed opacity-50'
+                          : isItemEquipmentMissing
+                            ? 'bg-red-950/30 hover:bg-red-900/50 text-red-200 border-red-500/50 cursor-pointer'
+                            : 'bg-[#181C23] hover:bg-[#252C38] text-[#D1D5DB] border-[#2A303C] cursor-pointer'
+                      }`}
                     >
                       {eq}
                     </button>
@@ -892,18 +1135,38 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <div>
-                    <label className="block text-[11.5px] font-medium text-[#D1D5DB] mb-1">
-                      Equipamento <span className="text-[#E51D24]">*</span>
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className={`block text-[11.5px] font-medium ${isItemEquipmentMissing ? 'text-red-400 font-bold' : 'text-[#D1D5DB]'}`}>
+                        Equipamento <span className="text-[#E51D24]">*</span>
+                      </label>
+                      {isItemEquipmentMissing && (
+                        <span className="text-[10px] text-red-400 font-bold">Obrigatório</span>
+                      )}
+                    </div>
                     <input
                       id={`os-item-${idx}-equipamento`}
                       ref={idx === 0 ? firstEquipmentRef : undefined}
                       type="text"
+                      aria-invalid={isItemEquipmentMissing}
+                      disabled={isOrderCompleted}
                       value={item.equipamento}
                       onChange={(e) => handleUpdateItem(idx, 'equipamento', e.target.value)}
                       placeholder="Ex: PlayStation 5 ou Controle DualSense"
-                      className="w-full px-3 py-2 bg-[#181C23] border border-[#374151] rounded text-sm text-white placeholder-[#6B7280] focus:outline-none focus:border-[#E51D24] focus:ring-2 focus:ring-[#E51D24]/20"
+                      className={`w-full px-3 py-2 rounded text-sm placeholder-[#6B7280] border transition-colors ${
+                        isOrderCompleted
+                          ? 'bg-[#14171C] text-gray-400 border-[#2A303C] cursor-not-allowed opacity-80'
+                          : isItemEquipmentMissing
+                            ? 'bg-red-950/20 border-2 border-red-500 text-white placeholder-red-300/60 focus:outline-none focus:ring-2 focus:ring-red-500/30'
+                            : 'bg-[#181C23] text-white border-[#374151] focus:outline-none focus:border-[#E51D24] focus:ring-2 focus:ring-[#E51D24]/20'
+                      }`}
+                      title={isOrderCompleted ? 'Equipamento bloqueado para edição em O.S. Concluída' : undefined}
                     />
+                    {isItemEquipmentMissing && (
+                      <p className="text-[11px] text-red-400 font-semibold mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>Preencha o nome do equipamento ou clique em uma sugestão acima.</span>
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -912,10 +1175,16 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
                     </label>
                     <input
                       type="text"
+                      disabled={isOrderCompleted}
                       value={item.marca || ''}
                       onChange={(e) => handleUpdateItem(idx, 'marca', e.target.value)}
                       placeholder="Ex: Sony, Microsoft, Nintendo"
-                      className="w-full px-3 py-2 bg-[#181C23] border border-[#22262E] rounded text-sm text-white placeholder-[#6B7280] focus:outline-none focus:border-[#E51D24] focus:ring-2 focus:ring-[#E51D24]/20"
+                      className={`w-full px-3 py-2 rounded text-sm placeholder-[#6B7280] border transition-colors ${
+                        isOrderCompleted
+                          ? 'bg-[#14171C] text-gray-400 border-[#2A303C] cursor-not-allowed opacity-80'
+                          : 'bg-[#181C23] text-white border-[#22262E] focus:outline-none focus:border-[#E51D24] focus:ring-2 focus:ring-[#E51D24]/20'
+                      }`}
+                      title={isOrderCompleted ? 'Marca bloqueada para edição em O.S. Concluída' : undefined}
                     />
                   </div>
 
@@ -925,10 +1194,16 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
                     </label>
                     <input
                       type="text"
+                      disabled={isOrderCompleted}
                       value={item.modelo || ''}
                       onChange={(e) => handleUpdateItem(idx, 'modelo', e.target.value)}
                       placeholder="Ex: CFI-1214A, Slim, Fat"
-                      className="w-full px-3 py-2 bg-[#181C23] border border-[#22262E] rounded text-sm text-white placeholder-[#6B7280] focus:outline-none focus:border-[#E51D24] focus:ring-2 focus:ring-[#E51D24]/20"
+                      className={`w-full px-3 py-2 rounded text-sm placeholder-[#6B7280] border transition-colors ${
+                        isOrderCompleted
+                          ? 'bg-[#14171C] text-gray-400 border-[#2A303C] cursor-not-allowed opacity-80'
+                          : 'bg-[#181C23] text-white border-[#22262E] focus:outline-none focus:border-[#E51D24] focus:ring-2 focus:ring-[#E51D24]/20'
+                      }`}
+                      title={isOrderCompleted ? 'Modelo bloqueado para edição em O.S. Concluída' : undefined}
                     />
                   </div>
 
@@ -938,10 +1213,16 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
                     </label>
                     <input
                       type="text"
+                      disabled={isOrderCompleted}
                       value={item.serie || ''}
                       onChange={(e) => handleUpdateItem(idx, 'serie', e.target.value)}
                       placeholder="Nº de série da carcaça"
-                      className="w-full px-3 py-2 bg-[#181C23] border border-[#22262E] rounded font-mono text-sm text-white placeholder-[#6B7280] focus:outline-none focus:border-[#E51D24] focus:ring-2 focus:ring-[#E51D24]/20"
+                      className={`w-full px-3 py-2 rounded font-mono text-sm placeholder-[#6B7280] border transition-colors ${
+                        isOrderCompleted
+                          ? 'bg-[#14171C] text-gray-400 border-[#2A303C] cursor-not-allowed opacity-80'
+                          : 'bg-[#181C23] text-white border-[#22262E] focus:outline-none focus:border-[#E51D24] focus:ring-2 focus:ring-[#E51D24]/20'
+                      }`}
+                      title={isOrderCompleted ? 'Número de série bloqueado para edição em O.S. Concluída' : undefined}
                     />
                   </div>
                 </div>
@@ -1032,7 +1313,8 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
                   />
                 </div>
               </div>
-            ))}
+            );
+          })}
           </div>
 
           {/* SOMA DOS ITENS INDIVIDUAIS SE INFORMADOS */}
@@ -1134,18 +1416,51 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
                     <Clock className="w-3.5 h-3.5 text-[#10B981]" />
                     <span>Data e Hora de Entrada</span>
                   </label>
-                  <span className="text-[10px] px-2 py-0.5 bg-[#10B981]/15 text-[#10B981] border border-[#10B981]/30 rounded font-bold font-mono uppercase tracking-wider flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" />
-                    Automático
-                  </span>
-                </div>
-                <div className="font-mono text-sm font-extrabold text-white mt-2 flex items-center gap-2">
-                  {isEditing && editingOrder?.entrada ? (
-                    <span>{formatDateTime(editingOrder.entrada)}</span>
-                  ) : (
-                    <span className="tabular-nums">
-                      {liveNow.toLocaleDateString('pt-BR')} às {liveNow.toLocaleTimeString('pt-BR')}
+                  {isOrderCompleted ? (
+                    <span className="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded font-bold font-mono uppercase tracking-wider flex items-center gap-1">
+                      <Lock className="w-3 h-3" />
+                      Histórico Travado
                     </span>
+                  ) : (
+                    <span className="text-[10px] px-2 py-0.5 bg-[#10B981]/15 text-[#10B981] border border-[#10B981]/30 rounded font-bold font-mono uppercase tracking-wider flex items-center gap-1">
+                      <Sparkles className="w-3 h-3" />
+                      Automático
+                    </span>
+                  )}
+                </div>
+                <div className="mt-2">
+                  {isEditing && editingOrder?.entrada ? (
+                    <div className="space-y-1.5">
+                      <div
+                        id="os-entrada-display"
+                        className={`flex items-center justify-between p-2 rounded border font-mono text-sm transition-colors ${
+                          isOrderCompleted
+                            ? 'bg-[#14171C] text-gray-400 border-[#2A303C] cursor-not-allowed opacity-80'
+                            : 'bg-[#181C23] text-white border-[#374151]'
+                        }`}
+                        title={isOrderCompleted ? 'Data de entrada bloqueada para O.S. Concluída' : 'Data de entrada gravada'}
+                      >
+                        <span className="font-extrabold select-all">{formatDateTime(editingOrder.entrada)}</span>
+                        {isOrderCompleted && (
+                          <span className="flex items-center gap-1 text-xs text-amber-400 font-sans font-semibold">
+                            <Lock className="w-3.5 h-3.5" />
+                            Bloqueado
+                          </span>
+                        )}
+                      </div>
+                      {isOrderCompleted && (
+                        <p className="text-[11px] text-amber-300/90 flex items-center gap-1 font-sans">
+                          <Lock className="w-3 h-3 text-amber-400 shrink-0" />
+                          Data de entrada bloqueada para manter a integridade do histórico.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="font-mono text-sm font-extrabold text-white flex items-center gap-2">
+                      <span className="tabular-nums">
+                        {liveNow.toLocaleDateString('pt-BR')} às {liveNow.toLocaleTimeString('pt-BR')}
+                      </span>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1289,23 +1604,41 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
             <motion.div
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
-              className="p-3.5 bg-rose-950/20 border border-rose-800/40 rounded-lg space-y-3"
+              className={`p-3.5 rounded-lg space-y-3 transition-all ${
+                attemptedSubmit && isDataRetornoMissing
+                  ? 'bg-rose-950/40 border-2 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]'
+                  : 'bg-rose-950/20 border border-rose-800/40'
+              }`}
             >
               <div className="text-xs font-bold text-rose-300 flex items-center gap-1.5">
                 <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
                 <span>Equipamento Retornou com Defeito</span>
+                {attemptedSubmit && isDataRetornoMissing && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] bg-red-500/20 text-red-300 border border-red-500/50 font-bold ml-auto animate-pulse">
+                    Data Obrigatória
+                  </span>
+                )}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-[11.5px] font-bold text-rose-300 mb-1">
-                    Data do Retorno
+                  <label className={`block text-[11.5px] font-bold mb-1 ${attemptedSubmit && isDataRetornoMissing ? 'text-red-400' : 'text-rose-300'}`}>
+                    Data do Retorno <span className="text-[#E51D24]">*</span>
                   </label>
                   <input
+                    id="os-data-retorno"
                     type="datetime-local"
                     value={dataRetorno}
+                    aria-invalid={attemptedSubmit && isDataRetornoMissing}
                     onChange={(e) => setDataRetorno(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#101216] border border-rose-800/60 rounded font-mono text-xs text-white focus:outline-none focus:border-rose-500"
+                    className={`w-full px-3 py-2 rounded font-mono text-xs text-white focus:outline-none transition-colors ${
+                      attemptedSubmit && isDataRetornoMissing
+                        ? 'bg-red-950/30 border-2 border-red-500 ring-2 ring-red-500/20'
+                        : 'bg-[#101216] border border-rose-800/60 focus:border-rose-500'
+                    }`}
                   />
+                  {attemptedSubmit && isDataRetornoMissing && (
+                    <p className="text-[10.5px] text-red-400 font-semibold mt-1">Data obrigatória para retorno.</p>
+                  )}
                 </div>
                 <div className="sm:col-span-2">
                   <label className="block text-[11.5px] font-bold text-rose-300 mb-1">
@@ -1322,6 +1655,13 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
               </div>
             </motion.div>
           )}
+
+          {/* LINHA DO TEMPO DE STATUS DA ORDEM DE SERVIÇO */}
+          {editingOrder && (
+            <div className="pt-2 border-t border-[#22262E]">
+              <OrderStatusTimeline order={editingOrder} />
+            </div>
+          )}
         </div>
 
         {/* SECTION 4: SISTEMA DE VALOR DE SERVIÇO UNIFICADO */}
@@ -1337,12 +1677,23 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
           </div>
 
           {/* VALOR TOTAL EM DESTAQUE */}
-          <div className="bg-[#101216] p-5 rounded-lg border-2 border-[#E51D24]/40 space-y-3">
+          <div
+            className={`p-5 rounded-lg space-y-3 transition-all ${
+              attemptedSubmit && isValorTotalInvalid
+                ? 'bg-[#191215] border-2 border-red-500 shadow-[0_0_18px_rgba(239,68,68,0.25)] ring-1 ring-red-500/30'
+                : 'bg-[#101216] border-2 border-[#E51D24]/40'
+            }`}
+          >
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <label className="block text-xs uppercase font-bold tracking-wider text-[#D1D5DB]">
+              <div className="flex items-center gap-2 flex-wrap">
+                <label className={`block text-xs uppercase font-bold tracking-wider ${attemptedSubmit && isValorTotalInvalid ? 'text-red-400' : 'text-[#D1D5DB]'}`}>
                   Valor Total do Serviço (R$) <span className="text-[#E51D24]">*</span>
                 </label>
+                {attemptedSubmit && isValorTotalInvalid && (
+                  <span className="text-[10px] bg-red-500/20 text-red-300 border border-red-500/50 px-1.5 py-0.5 rounded font-bold animate-pulse">
+                    Valor Inválido ou Vazio
+                  </span>
+                )}
                 {sumOfItemValues > 0 && (
                   <span className="text-[10.5px] font-mono px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-700/50 font-semibold">
                     ✓ Sincronizado com os itens
@@ -1378,13 +1729,13 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
                   onClick={() => setValorTotal('0')}
                   className="text-[11px] px-2 py-0.5 rounded bg-rose-950/30 hover:bg-rose-900/50 text-rose-300 border border-rose-800/40 cursor-pointer ml-auto"
                 >
-                  Zerar
+                  Zerar (R$0)
                 </button>
               </div>
             </div>
 
             <div className="relative max-w-sm">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-lg font-mono font-extrabold text-[#E51D24]">
+              <span className={`absolute left-3.5 top-1/2 -translate-y-1/2 text-lg font-mono font-extrabold ${attemptedSubmit && isValorTotalInvalid ? 'text-red-400' : 'text-[#E51D24]'}`}>
                 R$
               </span>
               <input
@@ -1392,12 +1743,23 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
                 type="number"
                 step="0.01"
                 min="0"
+                aria-invalid={attemptedSubmit && isValorTotalInvalid}
                 value={valorTotal}
                 onChange={(e) => setValorTotal(e.target.value)}
                 placeholder="0,00"
-                className="w-full pl-12 pr-4 py-3 bg-[#181C23] border border-[#374151] rounded font-mono text-2xl font-extrabold text-white focus:outline-none focus:border-[#E51D24] focus:ring-2 focus:ring-[#E51D24]/20"
+                className={`w-full pl-12 pr-4 py-3 rounded font-mono text-2xl font-extrabold text-white transition-colors ${
+                  attemptedSubmit && isValorTotalInvalid
+                    ? 'bg-red-950/30 border-2 border-red-500 focus:outline-none ring-2 ring-red-500/30'
+                    : 'bg-[#181C23] border border-[#374151] focus:outline-none focus:border-[#E51D24] focus:ring-2 focus:ring-[#E51D24]/20'
+                }`}
               />
             </div>
+            {attemptedSubmit && isValorTotalInvalid && (
+              <p className="text-xs text-red-400 font-semibold flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>Informe um valor numérico válido para a O.S. (caso o valor ainda esteja a combinar ou sob diagnóstico, mantenha 0,00).</span>
+              </p>
+            )}
           </div>
         </div>
 
@@ -1415,20 +1777,73 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
           />
         </div>
 
+        {/* BARRA DE AVISO DE PENDÊNCIAS ANTES DO SALVAMENTO */}
+        {attemptedSubmit && activeErrors.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-3.5 bg-red-950/60 border-2 border-red-500 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-red-200 shadow-xl"
+          >
+            <div className="flex items-center gap-2.5">
+              <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+              <div className="text-xs">
+                <p className="font-bold text-red-300">
+                  {activeErrors.length} {activeErrors.length === 1 ? 'campo obrigatório pendente' : 'campos obrigatórios pendentes'}
+                </p>
+                <p className="text-red-200/90 text-[11.5px]">
+                  Preencha os campos destacados com borda vermelha para que o salvamento seja liberado.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => scrollToField(activeErrors[0].fieldId)}
+              className="text-xs bg-red-600 hover:bg-red-500 text-white font-bold px-3 py-1.5 rounded transition-colors shrink-0 cursor-pointer flex items-center gap-1 shadow-md"
+            >
+              <span>Ir para o 1º campo pendente</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </motion.div>
+        )}
+
         {/* ACTION BUTTONS */}
-        <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-[#22262E]">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 pt-3 border-t border-[#22262E] flex-wrap">
+          {/* Botão Primário Salvar */}
           <button
-            type="submit"
-            className="px-6 py-3 bg-[#E51D24] hover:bg-[#C81018] text-white font-bold text-sm uppercase tracking-wider rounded transition-all shadow-[0_0_15px_rgba(229,29,36,0.35)] cursor-pointer flex items-center gap-2"
+            type="button"
+            onClick={(e) => handleSubmit(e, 'view')}
+            className="w-full sm:w-auto px-5 py-3.5 sm:py-3 bg-[#E51D24] hover:bg-[#C81018] text-white font-bold text-sm uppercase tracking-wider rounded transition-all shadow-[0_0_15px_rgba(229,29,36,0.35)] cursor-pointer flex items-center justify-center gap-2"
           >
             <Check className="w-4 h-4" />
-            <span>{isEditing ? 'Salvar Alterações da O.S.' : 'Criar Ordem de Serviço'}</span>
+            <span>{isEditing ? 'Salvar Alterações' : 'Criar Ordem de Serviço'}</span>
+          </button>
+
+          {/* Botão Finalizar e Enviar WhatsApp (PDF) */}
+          <button
+            type="button"
+            onClick={(e) => handleSubmit(e, 'whatsapp')}
+            className="w-full sm:w-auto px-5 py-3.5 sm:py-3 bg-[#25D366] hover:bg-[#1EBE5D] text-white font-bold text-sm tracking-wide rounded transition-all shadow-[0_0_15px_rgba(37,211,102,0.3)] cursor-pointer flex items-center justify-center gap-2"
+            title="Salvar O.S., gerar PDF do documento com os dados do cliente e abrir WhatsApp para envio"
+          >
+            <MessageCircle className="w-4 h-4" />
+            <span>{isEditing ? 'Salvar e Enviar WhatsApp (PDF)' : 'Finalizar e Enviar WhatsApp (PDF)'}</span>
+          </button>
+
+          {/* Botão Salvar e Imprimir */}
+          <button
+            type="button"
+            onClick={(e) => handleSubmit(e, 'print')}
+            className="w-full sm:w-auto px-4 py-3.5 sm:py-3 bg-[#1C2028] hover:bg-[#252B36] border border-[#374151] text-white font-bold text-sm rounded transition-all cursor-pointer flex items-center justify-center gap-2"
+            title="Salvar O.S. e abrir visualização para impressão"
+          >
+            <Printer className="w-4 h-4 text-[#E51D24]" />
+            <span>Salvar e Imprimir</span>
           </button>
 
           <button
             type="button"
             onClick={() => onNavigate('ordens')}
-            className="px-4 py-3 bg-transparent hover:bg-white/5 border border-transparent text-[#9CA3AF] hover:text-white rounded text-sm font-semibold transition-colors cursor-pointer"
+            className="w-full sm:w-auto px-4 py-3 bg-transparent hover:bg-white/5 border border-transparent text-[#9CA3AF] hover:text-white rounded text-sm font-semibold transition-colors cursor-pointer text-center"
           >
             Cancelar
           </button>
@@ -1501,25 +1916,38 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-1.5">
-                        <label className="block text-xs font-medium text-[#D1D5DB]">
+                        <label className={`block text-xs font-medium ${quickAttemptedSubmit && onlyDigits(quickCpf).length !== 11 ? 'text-red-400 font-bold' : 'text-[#D1D5DB]'}`}>
                           CPF <span className="text-[#E51D24]">*</span>
                         </label>
                         <span className="text-[9px] bg-[#E51D24]/15 text-[#F87171] border border-[#E51D24]/30 px-1 py-0.5 rounded font-semibold tracking-wide">
                           ID Único
                         </span>
                       </div>
-                      {onlyDigits(quickCpf).length === 11 && (
+                      {onlyDigits(quickCpf).length === 11 ? (
                         <span className="text-[10px] text-[#10B981] font-medium">11 dígitos</span>
-                      )}
+                      ) : quickAttemptedSubmit ? (
+                        <span className="text-[10px] text-red-400 font-bold">Obrigatório</span>
+                      ) : null}
                     </div>
                     <input
                       type="text"
                       maxLength={14}
                       value={quickCpf}
+                      aria-invalid={quickAttemptedSubmit && onlyDigits(quickCpf).length !== 11}
                       onChange={(e) => setQuickCpf(formatCPF(e.target.value))}
                       placeholder="000.000.000-00"
-                      className="w-full px-3 py-2 bg-[#101216] border border-[#22262E] rounded font-mono text-xs text-white placeholder-[#6B7280] focus:outline-none focus:border-[#E51D24]"
+                      className={`w-full px-3 py-2 rounded font-mono text-xs text-white placeholder-[#6B7280] focus:outline-none transition-colors ${
+                        quickAttemptedSubmit && onlyDigits(quickCpf).length !== 11
+                          ? 'bg-red-950/20 border-2 border-red-500 ring-2 ring-red-500/20 placeholder-red-300/60'
+                          : 'bg-[#101216] border border-[#22262E] focus:border-[#E51D24]'
+                      }`}
                     />
+                    {quickAttemptedSubmit && onlyDigits(quickCpf).length !== 11 && (
+                      <p className="text-[10.5px] text-red-400 font-semibold mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>CPF precisa ter 11 dígitos.</span>
+                      </p>
+                    )}
                     {(() => {
                       const digits = onlyDigits(quickCpf);
                       if (digits.length === 11) {
@@ -1537,17 +1965,33 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-[#D1D5DB] mb-1">
-                      WhatsApp / Tel <span className="text-[#E51D24]">*</span>
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className={`block text-xs font-medium ${quickAttemptedSubmit && onlyDigits(quickTelefone).length < 10 ? 'text-red-400 font-bold' : 'text-[#D1D5DB]'}`}>
+                        WhatsApp / Tel <span className="text-[#E51D24]">*</span>
+                      </label>
+                      {quickAttemptedSubmit && onlyDigits(quickTelefone).length < 10 && (
+                        <span className="text-[10px] text-red-400 font-bold">Obrigatório</span>
+                      )}
+                    </div>
                     <input
                       type="text"
                       maxLength={15}
                       value={quickTelefone}
+                      aria-invalid={quickAttemptedSubmit && onlyDigits(quickTelefone).length < 10}
                       onChange={(e) => setQuickTelefone(formatPhone(e.target.value))}
                       placeholder="(00) 00000-0000"
-                      className="w-full px-3 py-2 bg-[#101216] border border-[#22262E] rounded font-mono text-xs text-white placeholder-[#6B7280] focus:outline-none focus:border-[#E51D24]"
+                      className={`w-full px-3 py-2 rounded font-mono text-xs text-white placeholder-[#6B7280] focus:outline-none transition-colors ${
+                        quickAttemptedSubmit && onlyDigits(quickTelefone).length < 10
+                          ? 'bg-red-950/20 border-2 border-red-500 ring-2 ring-red-500/20 placeholder-red-300/60'
+                          : 'bg-[#101216] border border-[#22262E] focus:border-[#E51D24]'
+                      }`}
                     />
+                    {quickAttemptedSubmit && onlyDigits(quickTelefone).length < 10 && (
+                      <p className="text-[10.5px] text-red-400 font-semibold mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>Informe telefone válido com DDD.</span>
+                      </p>
+                    )}
                   </div>
                 </div>
 

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="96" fill="#14171C"/>
+  <rect x="24" y="24" width="464" height="464" rx="72" fill="none" stroke="#E51D24" stroke-width="12" stroke-opacity="0.6"/>
+  <!-- Joystick / Tech element -->
+  <circle cx="256" cy="180" r="48" fill="#E51D24"/>
+  <rect x="236" y="200" width="40" height="90" rx="10" fill="#E51D24"/>
+  <path d="M160 330 L352 330 C374 330 392 348 392 370 C392 392 374 410 352 410 L160 410 C138 410 120 392 120 370 C120 348 138 330 160 330 Z" fill="#22262E" stroke="#E51D24" stroke-width="8"/>
+  <text x="256" y="380" fill="#FFFFFF" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="36" text-anchor="middle" letter-spacing="4">N! GAMES</text>
+  <text x="256" y="440" fill="#9CA3AF" font-family="system-ui, -apple-system, sans-serif" font-weight="600" font-size="20" text-anchor="middle" letter-spacing="2">ASSISTÊNCIA TÉCNICA</text>
+</svg>

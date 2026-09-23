@@ -66,6 +66,15 @@ function toOrder(row: any): ServiceOrder {
     }
   }
 
+  let parsedHistory: any[] | undefined;
+  if (row.historico_status) {
+    try {
+      parsedHistory = typeof row.historico_status === 'string' ? JSON.parse(row.historico_status) : row.historico_status;
+    } catch {
+      parsedHistory = undefined;
+    }
+  }
+
   return {
     id: row.id,
     numero: Number(row.numero),
@@ -93,6 +102,7 @@ function toOrder(row: any): ServiceOrder {
     obs: row.obs || undefined,
     createdAt: row.created_at || new Date().toISOString(),
     retornoAt: row.retorno_at || undefined,
+    historicoStatus: Array.isArray(parsedHistory) ? parsedHistory : undefined,
   };
 }
 
@@ -125,6 +135,7 @@ function fromOrder(o: ServiceOrder): any {
     obs: o.obs || null,
     created_at: o.createdAt,
     retorno_at: o.retornoAt || null,
+    historico_status: o.historicoStatus ? JSON.stringify(o.historicoStatus) : null,
   };
 }
 
@@ -378,6 +389,7 @@ export async function updateSupabaseOrder(id: string, data: Partial<ServiceOrder
     if (data.pecas !== undefined) updatePayload.pecas = data.pecas ?? null;
     if (data.desconto !== undefined) updatePayload.desconto = data.desconto ?? null;
     if (data.obs !== undefined) updatePayload.obs = data.obs || null;
+    if (data.historicoStatus !== undefined) updatePayload.historico_status = data.historicoStatus ? JSON.stringify(data.historicoStatus) : null;
 
     let { error } = await sb.from('service_orders').update(updatePayload).eq('id', id);
     if (error && isAuthOrKeyError(error)) {
