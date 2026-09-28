@@ -618,6 +618,7 @@ app.post('/api/orders', async (req: Request, res: Response) => {
       serie: serie ? String(serie).trim() : undefined,
       defeito: defeito ? String(defeito).trim() : undefined,
       solucao: solucao ? String(solucao).trim() : undefined,
+      estadoConsole: req.body.estadoConsole ? String(req.body.estadoConsole).trim() : undefined,
       itens: Array.isArray(itens) ? itens : undefined,
       valor: typeof valor === 'number' ? valor : (Number(valor) || 0),
       maoObra: maoObra !== undefined ? Number(maoObra) : undefined,

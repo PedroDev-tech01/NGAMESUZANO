@@ -75,6 +75,45 @@ function toOrder(row: any): ServiceOrder {
     }
   }
 
+  // Synthesize default timeline history if not stored in DB
+  if (!parsedHistory || parsedHistory.length === 0) {
+    parsedHistory = [
+      {
+        id: `init-${row.id}`,
+        de: 'Criada',
+        para: row.situacao || 'Em aberto',
+        data: row.entrada || row.created_at || new Date().toISOString(),
+        observacao: 'Abertura da O.S.',
+      },
+    ];
+    if (row.data_retorno || row.retorno_at) {
+      parsedHistory.push({
+        id: `ret-${row.id}`,
+        de: 'Em aberto',
+        para: 'Retornou com defeito',
+        data: row.data_retorno || row.retorno_at,
+        observacao: row.motivo_retorno || 'Retornou com defeito',
+      });
+    }
+    if (row.data_retirada) {
+      parsedHistory.push({
+        id: `retirada-${row.id}`,
+        de: row.situacao || 'Concluído',
+        para: 'Concluído',
+        data: row.data_retirada,
+        observacao: 'Equipamento retirado pelo cliente (Garantia ativada)',
+      });
+    } else if (row.saida) {
+      parsedHistory.push({
+        id: `saida-${row.id}`,
+        de: 'Em andamento',
+        para: 'Concluído',
+        data: row.saida,
+        observacao: 'Serviço concluído',
+      });
+    }
+  }
+
   return {
     id: row.id,
     numero: Number(row.numero),
@@ -106,7 +145,7 @@ function toOrder(row: any): ServiceOrder {
   };
 }
 
-// Convert ServiceOrder to DB row
+// Convert ServiceOrder to DB row (only valid Supabase columns)
 function fromOrder(o: ServiceOrder): any {
   return {
     id: o.id,
@@ -135,7 +174,6 @@ function fromOrder(o: ServiceOrder): any {
     obs: o.obs || null,
     created_at: o.createdAt,
     retorno_at: o.retornoAt || null,
-    historico_status: o.historicoStatus ? JSON.stringify(o.historicoStatus) : null,
   };
 }
 
@@ -340,17 +378,69 @@ export async function insertSupabaseOrder(order: ServiceOrder): Promise<ServiceO
   if (!sb) return order;
 
   try {
-    let { error } = await sb.from('service_orders').insert([fromOrder(order)]);
+    let finalClienteId = order.clienteId;
+
+    // Safety check for foreign key: ensure client exists in Supabase
+    if (finalClienteId) {
+      const { data: directClient } = await sb
+        .from('clients')
+        .select('id, cpf')
+        .eq('id', finalClienteId)
+        .maybeSingle();
+
+      if (!directClient) {
+        // Not found by direct ID, check if client exists by matching CPF
+        const cleanDigits = finalClienteId.replace(/\D/g, '');
+        if (cleanDigits.length >= 11) {
+          const { data: allSbClients } = await sb.from('clients').select('id, cpf');
+          const matched = allSbClients?.find((c) => (c.cpf || '').replace(/\D/g, '') === cleanDigits);
+          if (matched) {
+            finalClienteId = matched.id;
+          }
+        }
+
+        // If client is still not in Supabase, check local cache to insert client first
+        if (finalClienteId === order.clienteId) {
+          const inMemoryClient = cachedClients.find(
+            (c) => c.id === order.clienteId || (cleanDigits.length >= 11 && (c.cpf || '').replace(/\D/g, '') === cleanDigits)
+          );
+          if (inMemoryClient) {
+            await insertSupabaseClient(inMemoryClient);
+            finalClienteId = inMemoryClient.id;
+          }
+        }
+      }
+    }
+
+    const payload = fromOrder({ ...order, clienteId: finalClienteId });
+    let { error } = await sb.from('service_orders').insert([payload]);
+
     if (error && isAuthOrKeyError(error)) {
       resetSupabaseClientToDefault();
       sb = getSupabase();
       if (sb) {
-        const retry = await sb.from('service_orders').insert([fromOrder(order)]);
+        const retry = await sb.from('service_orders').insert([payload]);
         error = retry.error;
       }
     }
+
     if (error) {
-      console.warn('[Supabase] Aviso ao inserir ordem, salva no cache local:', error.message);
+      console.warn('[Supabase] Erro ao inserir ordem:', error.message);
+      // Auto-heal on foreign key mismatch
+      if (error.code === '23503') {
+        const { data: sbClients } = await sb.from('clients').select('id, cpf');
+        const matched = sbClients?.find((c) => (c.cpf || '').replace(/\D/g, '') === (order.clienteId || '').replace(/\D/g, ''));
+        if (matched) {
+          payload.cliente_id = matched.id;
+          const retryFk = await sb.from('service_orders').insert([payload]);
+          if (!retryFk.error) {
+            console.log(`[Supabase] Ordem #${order.numero} gravada após reconciliar cliente!`);
+            return { ...order, clienteId: matched.id };
+          }
+        }
+      }
+    } else {
+      console.log(`[Supabase] Ordem #${order.numero} gravada com sucesso!`);
     }
   } catch (err: any) {
     console.warn('[Supabase] Exceção ao inserir ordem:', err.message);
@@ -389,7 +479,6 @@ export async function updateSupabaseOrder(id: string, data: Partial<ServiceOrder
     if (data.pecas !== undefined) updatePayload.pecas = data.pecas ?? null;
     if (data.desconto !== undefined) updatePayload.desconto = data.desconto ?? null;
     if (data.obs !== undefined) updatePayload.obs = data.obs || null;
-    if (data.historicoStatus !== undefined) updatePayload.historico_status = data.historicoStatus ? JSON.stringify(data.historicoStatus) : null;
 
     let { error } = await sb.from('service_orders').update(updatePayload).eq('id', id);
     if (error && isAuthOrKeyError(error)) {

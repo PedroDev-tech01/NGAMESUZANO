@@ -177,6 +177,7 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
   const [formError, setFormError] = useState<string | null>(null);
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [quickAttemptedSubmit, setQuickAttemptedSubmit] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Live ticking clock for real-time automatic entrada timestamp display
   const [liveNow, setLiveNow] = useState<Date>(new Date());
@@ -293,8 +294,18 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
     }
   }, [editingOrder, initialClientId]);
 
-  // Selected client object
-  const selectedClient = clients.find((c) => c.id === selectedClientId) || null;
+  // Fallback state for inline created or selected client to ensure instant UI update
+  const [selectedClientFallback, setSelectedClientFallback] = useState<Client | null>(null);
+
+  // Selected client object with robust matching (by exact ID, CPF digits, or fallback)
+  const selectedClient = clients.find((c) => {
+    if (!selectedClientId) return false;
+    if (c.id === selectedClientId) return true;
+    const cleanId = onlyDigits(selectedClientId);
+    const cleanCpf = onlyDigits(c.cpf);
+    if (cleanId && cleanCpf && cleanId === cleanCpf) return true;
+    return false;
+  }) || selectedClientFallback || null;
 
   // Filter clients for dropdown search
   const filteredClients = clients.filter((c) => {
@@ -311,6 +322,7 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
   // Action: Select client and auto-focus equipment ("jogar ja o cadastro do cliente na tela e ir pra ordem de servico")
   const handleSelectClient = (c: Client) => {
     setSelectedClientId(c.id);
+    setSelectedClientFallback(c);
     setIsClientDropdownOpen(false);
     setClientSearchTerm('');
     setFormError(null);
@@ -573,7 +585,7 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
   }, [attemptedSubmit, activeErrors.length, formError]);
 
   // Submit Order Form
-  const handleSubmit = (e?: React.FormEvent, requestedAction: 'view' | 'whatsapp' | 'print' = 'view') => {
+  const handleSubmit = async (e?: React.FormEvent, requestedAction: 'view' | 'whatsapp' | 'print' = 'view') => {
     if (e && typeof e.preventDefault === 'function') {
       e.preventDefault();
     }
@@ -586,11 +598,18 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
     }
     setFormError(null);
 
+    const effectiveClientId = selectedClient?.id || selectedClientId;
+    if (!effectiveClientId && !isOrderCompleted) {
+      setFormError('Selecione ou cadastre o cliente para esta Ordem de Serviço.');
+      scrollToField('os-client-section');
+      return;
+    }
+
     const primaryItem = itens[0];
     const finalVal = parseFloat(valorTotal) || 0;
 
     const orderPayload: Partial<ServiceOrder> = {
-      clienteId: selectedClientId,
+      clienteId: effectiveClientId,
       equipamento: primaryItem.equipamento.trim(),
       marca: primaryItem.marca.trim() || undefined,
       modelo: primaryItem.modelo.trim() || undefined,
@@ -642,11 +661,16 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
       }
     }
 
-    onSave(orderPayload, requestedAction);
+    setIsSubmitting(true);
+    try {
+      await onSave(orderPayload, requestedAction);
+    } finally {
+      setTimeout(() => setIsSubmitting(false), 1200);
+    }
   };
 
   return (
-    <div id="view-os-form" className="space-y-6 max-w-4xl pb-16">
+    <div id="view-os-form" className="space-y-6 max-w-4xl pb-28 sm:pb-16">
       {/* Page Title & Breadcrumb */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -1811,29 +1835,53 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
           {/* Botão Primário Salvar */}
           <button
             type="button"
+            disabled={isSubmitting}
             onClick={(e) => handleSubmit(e, 'view')}
-            className="w-full sm:w-auto px-5 py-3.5 sm:py-3 bg-[#E51D24] hover:bg-[#C81018] text-white font-bold text-sm uppercase tracking-wider rounded transition-all shadow-[0_0_15px_rgba(229,29,36,0.35)] cursor-pointer flex items-center justify-center gap-2"
+            className={`w-full sm:w-auto px-5 py-3.5 sm:py-3 text-white font-bold text-sm uppercase tracking-wider rounded transition-all shadow-[0_0_15px_rgba(229,29,36,0.35)] flex items-center justify-center gap-2 ${
+              isSubmitting
+                ? 'bg-[#A8151A] cursor-wait opacity-80'
+                : 'bg-[#E51D24] hover:bg-[#C81018] cursor-pointer'
+            }`}
           >
-            <Check className="w-4 h-4" />
-            <span>{isEditing ? 'Salvar Alterações' : 'Criar Ordem de Serviço'}</span>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Registrando O.S...</span>
+              </>
+            ) : (
+              <>
+                <Check className="w-4 h-4" />
+                <span>{isEditing ? 'Salvar Alterações' : 'Criar Ordem de Serviço'}</span>
+              </>
+            )}
           </button>
 
           {/* Botão Finalizar e Enviar WhatsApp (PDF) */}
           <button
             type="button"
+            disabled={isSubmitting}
             onClick={(e) => handleSubmit(e, 'whatsapp')}
-            className="w-full sm:w-auto px-5 py-3.5 sm:py-3 bg-[#25D366] hover:bg-[#1EBE5D] text-white font-bold text-sm tracking-wide rounded transition-all shadow-[0_0_15px_rgba(37,211,102,0.3)] cursor-pointer flex items-center justify-center gap-2"
+            className={`w-full sm:w-auto px-5 py-3.5 sm:py-3 text-white font-bold text-sm tracking-wide rounded transition-all shadow-[0_0_15px_rgba(37,211,102,0.3)] flex items-center justify-center gap-2 ${
+              isSubmitting
+                ? 'bg-[#188B46] cursor-wait opacity-80'
+                : 'bg-[#25D366] hover:bg-[#1EBE5D] cursor-pointer'
+            }`}
             title="Salvar O.S., gerar PDF do documento com os dados do cliente e abrir WhatsApp para envio"
           >
-            <MessageCircle className="w-4 h-4" />
+            {isSubmitting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <MessageCircle className="w-4 h-4" />
+            )}
             <span>{isEditing ? 'Salvar e Enviar WhatsApp (PDF)' : 'Finalizar e Enviar WhatsApp (PDF)'}</span>
           </button>
 
           {/* Botão Salvar e Imprimir */}
           <button
             type="button"
+            disabled={isSubmitting}
             onClick={(e) => handleSubmit(e, 'print')}
-            className="w-full sm:w-auto px-4 py-3.5 sm:py-3 bg-[#1C2028] hover:bg-[#252B36] border border-[#374151] text-white font-bold text-sm rounded transition-all cursor-pointer flex items-center justify-center gap-2"
+            className="w-full sm:w-auto px-4 py-3.5 sm:py-3 bg-[#1C2028] hover:bg-[#252B36] border border-[#374151] text-white font-bold text-sm rounded transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60"
             title="Salvar O.S. e abrir visualização para impressão"
           >
             <Printer className="w-4 h-4 text-[#E51D24]" />
@@ -1842,6 +1890,7 @@ export const OrderFormView: React.FC<OrderFormViewProps> = ({
 
           <button
             type="button"
+            disabled={isSubmitting}
             onClick={() => onNavigate('ordens')}
             className="w-full sm:w-auto px-4 py-3 bg-transparent hover:bg-white/5 border border-transparent text-[#9CA3AF] hover:text-white rounded text-sm font-semibold transition-colors cursor-pointer text-center"
           >

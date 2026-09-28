@@ -51,6 +51,13 @@ const MASTER_NOME_FANTASIA = 'N! GAMES';
 
 // Local storage keys matching App.tsx
 const STORAGE_KEYS = {
+  CLIENTS: 'ngames_clients_v1',
+  ORDERS: 'ngames_orders_v1',
+  SEQ: 'ngames_order_seq_v1',
+  EXPENSES: 'ngames_expenses_v1',
+};
+
+const LEGACY_STORAGE_KEYS = {
   CLIENTS: 'ngames_os_clients_v2',
   ORDERS: 'ngames_os_orders_v2',
   SEQ: 'ngames_os_seq_v2',
@@ -60,8 +67,15 @@ const STORAGE_KEYS = {
 function getLocalData<T>(key: string, fallback: T): T {
   try {
     const item = localStorage.getItem(key);
-    if (!item) return fallback;
-    return JSON.parse(item);
+    if (item) return JSON.parse(item);
+
+    // Check legacy key if present
+    const legacyKey = (LEGACY_STORAGE_KEYS as any)[Object.keys(STORAGE_KEYS).find(k => (STORAGE_KEYS as any)[k] === key) || ''];
+    if (legacyKey) {
+      const legacyItem = localStorage.getItem(legacyKey);
+      if (legacyItem) return JSON.parse(legacyItem);
+    }
+    return fallback;
   } catch {
     return fallback;
   }
@@ -69,7 +83,12 @@ function getLocalData<T>(key: string, fallback: T): T {
 
 function setLocalData<T>(key: string, data: T): void {
   try {
-    localStorage.setItem(key, JSON.stringify(data));
+    const json = JSON.stringify(data);
+    localStorage.setItem(key, json);
+    const legacyKey = (LEGACY_STORAGE_KEYS as any)[Object.keys(STORAGE_KEYS).find(k => (STORAGE_KEYS as any)[k] === key) || ''];
+    if (legacyKey) {
+      localStorage.setItem(legacyKey, json);
+    }
   } catch {
     // ignore quota errors
   }
@@ -190,8 +209,11 @@ export const api = {
         body: JSON.stringify(client),
       });
     } catch (err: any) {
+      const cleanCpf = (client.cpf || '').replace(/\D/g, '');
+      const canonicalId = cleanCpf.length === 11 ? `cpf-${cleanCpf}` : (client.id || 'cli-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6));
+
       const newClient: Client = {
-        id: client.id || 'cli-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6),
+        id: client.id || canonicalId,
         nome: client.nome || '',
         telefone: client.telefone || '',
         cpf: client.cpf || '',
@@ -210,7 +232,7 @@ export const api = {
       }
 
       const current = getLocalData<Client[]>(STORAGE_KEYS.CLIENTS, []);
-      setLocalData(STORAGE_KEYS.CLIENTS, [newClient, ...current]);
+      setLocalData(STORAGE_KEYS.CLIENTS, [newClient, ...current.filter(c => c.id !== newClient.id)]);
       return newClient;
     }
   },
@@ -322,6 +344,7 @@ export const api = {
         serie: order.serie,
         defeito: order.defeito,
         solucao: order.solucao,
+        estadoConsole: order.estadoConsole,
         valor: order.valor ?? 0,
         maoObra: order.maoObra,
         pecas: order.pecas,

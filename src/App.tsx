@@ -639,6 +639,7 @@ export default function App() {
 
       // Optimistic create
       const newOrderLocal: ServiceOrder = {
+        ...orderData,
         id: uid(),
         numero: clientTempNumber,
         clienteId: orderData.clienteId!,
@@ -646,13 +647,22 @@ export default function App() {
         canal: orderData.canal || 'Presencial',
         entrada: exactCreationTime, // Automático exatamente no momento da criação
         saida: orderData.saida,
-        equipamento: orderData.equipamento || '',
+        prazo: orderData.prazo,
+        dataRetirada: orderData.dataRetirada,
+        dataRetorno: orderData.dataRetorno,
+        motivoRetorno: orderData.motivoRetorno,
+        equipamento: orderData.equipamento || (orderData.itens?.[0]?.equipamento || ''),
         marca: orderData.marca,
         modelo: orderData.modelo,
         serie: orderData.serie,
         defeito: orderData.defeito,
         solucao: orderData.solucao,
+        estadoConsole: orderData.estadoConsole,
+        itens: orderData.itens,
         valor: orderData.valor !== undefined ? Number(orderData.valor) : 0,
+        maoObra: orderData.maoObra,
+        pecas: orderData.pecas,
+        desconto: orderData.desconto,
         obs: orderData.obs,
         createdAt: exactCreationTime,
         retornoAt: orderData.situacao === 'Retornou com defeito' ? exactCreationTime : undefined,
@@ -671,10 +681,12 @@ export default function App() {
           entrada: exactCreationTime,
           historicoStatus: initialHistory,
         });
-        savedOrder = created;
-        // Replace local optimistic item with server item
-        setOrders((prev) => prev.map((o) => (o.id === newOrderLocal.id ? created : o)));
-        setNextOrderSeq((prev) => Math.max(prev, created.numero + 1));
+        if (created && created.id) {
+          savedOrder = created;
+          // Replace local optimistic item with server item
+          setOrders((prev) => prev.map((o) => (o.id === newOrderLocal.id ? created : o)));
+          setNextOrderSeq((prev) => Math.max(prev, created.numero + 1));
+        }
         setIsServerOnline(true);
       } catch (err) {
         console.error('Failed to create order on server:', err);
@@ -812,10 +824,11 @@ export default function App() {
     showToast(`Cliente ${nomeUpper} cadastrado!`);
 
     try {
-      const created = await api.createClient({ ...clientData, nome: nomeUpper });
-      setClients((prev) => prev.map((c) => (c.id === canonicalId ? created : c)));
+      const created = await api.createClient({ ...clientData, id: canonicalId, nome: nomeUpper });
+      const finalClient = { ...created, id: created.id || canonicalId };
+      setClients((prev) => prev.map((c) => (c.id === canonicalId ? finalClient : c)));
       setIsServerOnline(true);
-      return created;
+      return finalClient;
     } catch (err: any) {
       console.error('Failed to create client on server:', err);
       return newClientLocal;
