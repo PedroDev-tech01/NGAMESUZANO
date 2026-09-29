@@ -221,8 +221,7 @@ export const ClientFormView: React.FC<ClientFormViewProps> = ({
 
     if (hasError) return;
 
-    // Conforme pedido: "Quando a pessoa for cadastrar, coloque somente o cep nao precisa colocar o nome"
-    // Se o técnico não digitar o nome, o sistema cria o cliente automaticamente identificado com segurança
+    // Cadastro simplificado por CEP e identificador fiscal quando o nome for omitido
     const cleanNome = nome.trim();
     const finalNome = cleanNome
       ? cleanNome.toUpperCase()

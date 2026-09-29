@@ -215,8 +215,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         const y = parseInt(yearStr, 10);
         const m = parseInt(monthStr, 10) - 1;
         if (!isNaN(y) && !isNaN(m)) {
-          const dummyDate = new Date(y, m, 1);
-          const stats = getOrCreate(dummyDate);
+          const periodDate = new Date(y, m, 1);
+          const stats = getOrCreate(periodDate);
           stats.custoManutencaoGeral += Number(exp.valor) || 0;
           stats.despesasMes.push(exp);
         }

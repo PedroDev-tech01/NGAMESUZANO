@@ -29,7 +29,9 @@ import {
   Save,
   PackageCheck,
   History,
+  FileCheck2,
 } from 'lucide-react';
+import { TechnicalReportModal } from './TechnicalReportModal';
 
 interface OrdersListViewProps {
   orders: ServiceOrder[];
@@ -67,6 +69,9 @@ export const OrdersListView: React.FC<OrdersListViewProps> = ({
   const [prazoModalOrder, setPrazoModalOrder] = useState<ServiceOrder | null>(null);
   const [prazoModalValue, setPrazoModalValue] = useState<string>('');
   const [isSavingPrazo, setIsSavingPrazo] = useState<boolean>(false);
+
+  // Technical Report Modal (Relacionamento 1:1) state
+  const [selectedLaudoOrder, setSelectedLaudoOrder] = useState<ServiceOrder | null>(null);
 
   // Sync initialStatusFilter if prop changes
   useEffect(() => {
@@ -517,6 +522,16 @@ export const OrdersListView: React.FC<OrdersListViewProps> = ({
 
                         <button
                           type="button"
+                          onClick={() => setSelectedLaudoOrder(order)}
+                          className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-md border border-amber-500/40 text-amber-300 hover:bg-amber-950/30 cursor-pointer"
+                          title="Laudo Técnico Pericial Especializado (Relacionamento 1:1)"
+                        >
+                          <FileCheck2 className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Laudo 1:1</span>
+                        </button>
+
+                        <button
+                          type="button"
                           onClick={() => onPrintOrder(order)}
                           className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-md bg-[#E51D24] text-white cursor-pointer"
                         >
@@ -751,6 +766,16 @@ export const OrdersListView: React.FC<OrdersListViewProps> = ({
 
                           <button
                             type="button"
+                            onClick={() => setSelectedLaudoOrder(order)}
+                            className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-md border border-amber-500/40 text-amber-300 hover:text-amber-200 hover:bg-amber-950/30 transition-colors cursor-pointer"
+                            title="Laudo Técnico Pericial Especializado (Relacionamento 1:1 Estrito)"
+                          >
+                            <FileCheck2 className="w-3.5 h-3.5 text-amber-400" />
+                            <span className="hidden xl:inline text-[11px]">Laudo 1:1</span>
+                          </button>
+
+                          <button
+                            type="button"
                             onClick={() => onPrintOrder(order)}
                             className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-md bg-[#E51D24] hover:bg-[#C81018] text-white transition-colors cursor-pointer shadow-xs"
                             title="Imprimir ordem de serviço"
@@ -930,6 +955,17 @@ export const OrdersListView: React.FC<OrdersListViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Modal de Laudo Técnico Pericial (Relacionamento 1:1) */}
+      <TechnicalReportModal
+        isOpen={!!selectedLaudoOrder}
+        order={selectedLaudoOrder}
+        client={selectedLaudoOrder ? clients.find((c) => c.id === selectedLaudoOrder.clienteId) || null : null}
+        onClose={() => setSelectedLaudoOrder(null)}
+        onSaved={() => {
+          onShowToast?.('Laudo Técnico (1:1) registrado com sucesso!');
+        }}
+      />
     </div>
   );
 };

@@ -312,7 +312,7 @@ export const ServerStatusModal: React.FC<ServerStatusModalProps> = ({
             type="button"
             disabled={resetting}
             onClick={async () => {
-              if (window.confirm('Tem certeza que deseja restaurar os dados iniciais de demonstração no servidor?')) {
+              if (window.confirm('Deseja realmente restaurar os registros padrão da assistência no servidor?')) {
                 setResetting(true);
                 try {
                   await onResetData();
@@ -324,7 +324,7 @@ export const ServerStatusModal: React.FC<ServerStatusModalProps> = ({
             }}
             className="text-xs text-[#EF4444] hover:text-[#DC2626] font-medium transition-colors cursor-pointer disabled:opacity-50"
           >
-            {resetting ? 'Restaurando...' : 'Restaurar Dados Demo'}
+            {resetting ? 'Restaurando...' : 'Restaurar Registros Padrão'}
           </button>
 
           <div className="flex items-center gap-2">

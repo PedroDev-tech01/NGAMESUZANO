@@ -124,22 +124,22 @@ export default function App() {
     return params.get('print') || params.get('orderId') || params.get('os');
   });
 
-  // Fictitious mock IDs to strip out
-  const FICTITIOUS_CLIENT_IDS = new Set(['cli-1', 'cli-2', 'cli-3', 'cli-4']);
-  const FICTITIOUS_ORDER_IDS = new Set([
+  // Filtro de isolamento de registros de teste antigos
+  const LEGACY_TEST_CLIENT_IDS = new Set(['cli-1', 'cli-2', 'cli-3', 'cli-4']);
+  const LEGACY_TEST_ORDER_IDS = new Set([
     'ord-1', 'ord-2', 'ord-3', 'ord-4',
     'ord-hist-1', 'ord-hist-2', 'ord-hist-3', 'ord-hist-4',
     'ord-hist-5', 'ord-hist-6', 'ord-hist-7', 'ord-hist-8'
   ]);
 
-  // Clients state - real data only
+  // Estado de clientes
   const [clients, setClients] = useState<Client[]>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.CLIENTS);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
-          return parsed.filter((c: Client) => !FICTITIOUS_CLIENT_IDS.has(c.id));
+          return parsed.filter((c: Client) => !LEGACY_TEST_CLIENT_IDS.has(c.id));
         }
       }
     } catch {
@@ -148,7 +148,7 @@ export default function App() {
     return INITIAL_CLIENTS;
   });
 
-  // Orders state - real data only
+  // Estado de ordens de serviço
   const [orders, setOrders] = useState<ServiceOrder[]>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.ORDERS);
@@ -156,7 +156,7 @@ export default function App() {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
           return parsed.filter(
-            (o: ServiceOrder) => !FICTITIOUS_ORDER_IDS.has(o.id) && !FICTITIOUS_CLIENT_IDS.has(o.clienteId)
+            (o: ServiceOrder) => !LEGACY_TEST_ORDER_IDS.has(o.id) && !LEGACY_TEST_CLIENT_IDS.has(o.clienteId)
           );
         }
       }
@@ -222,12 +222,12 @@ export default function App() {
     try {
       const data = await api.getBootstrap();
       if (Array.isArray(data.clients)) {
-        setClients(data.clients.filter((c: Client) => !FICTITIOUS_CLIENT_IDS.has(c.id)));
+        setClients(data.clients.filter((c: Client) => !LEGACY_TEST_CLIENT_IDS.has(c.id)));
       }
       if (Array.isArray(data.orders)) {
         setOrders(
           data.orders.filter(
-            (o: ServiceOrder) => !FICTITIOUS_ORDER_IDS.has(o.id) && !FICTITIOUS_CLIENT_IDS.has(o.clienteId)
+            (o: ServiceOrder) => !LEGACY_TEST_ORDER_IDS.has(o.id) && !LEGACY_TEST_CLIENT_IDS.has(o.clienteId)
           )
         );
       }

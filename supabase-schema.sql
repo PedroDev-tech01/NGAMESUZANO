@@ -45,7 +45,32 @@ CREATE TABLE IF NOT EXISTS public.service_orders (
   retorno_at TEXT
 );
 
--- 3. Tabela de Custos / Despesas de Manutenção
+-- 3. Tabela de Laudos Técnicos Especializados (Relacionamento 1:1 estrito com service_orders)
+CREATE TABLE IF NOT EXISTS public.technical_reports (
+  id TEXT PRIMARY KEY,
+  service_order_id TEXT NOT NULL UNIQUE REFERENCES public.service_orders(id) ON DELETE CASCADE,
+  diagnostico TEXT NOT NULL,
+  servico_realizado TEXT NOT NULL,
+  pecas_utilizadas TEXT,
+  observacao_tecnica TEXT,
+  tecnico_responsavel TEXT NOT NULL,
+  data_analise TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+-- 4. Tabela de Histórico de Mudança de Status (Relacionamento 1:N com service_orders)
+CREATE TABLE IF NOT EXISTS public.service_order_status_history (
+  id TEXT PRIMARY KEY,
+  service_order_id TEXT NOT NULL REFERENCES public.service_orders(id) ON DELETE CASCADE,
+  status_anterior TEXT NOT NULL,
+  status_novo TEXT NOT NULL,
+  observacao TEXT,
+  usuario TEXT,
+  created_at TEXT NOT NULL
+);
+
+-- 5. Tabela de Custos / Despesas de Manutenção
 CREATE TABLE IF NOT EXISTS public.maintenance_expenses (
   id TEXT PRIMARY KEY,
   mes TEXT NOT NULL,
@@ -56,14 +81,14 @@ CREATE TABLE IF NOT EXISTS public.maintenance_expenses (
   created_at TEXT NOT NULL
 );
 
--- 4. Tabela de Configurações do Sistema
+-- 6. Tabela de Configurações do Sistema
 CREATE TABLE IF NOT EXISTS public.system_settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
--- 5. Tabela de Contas de Login / Autenticação de Usuários
+-- 7. Tabela de Contas de Login / Autenticação de Usuários
 CREATE TABLE IF NOT EXISTS public.auth_accounts (
   id TEXT PRIMARY KEY,
   cnpj TEXT NOT NULL UNIQUE,
@@ -73,6 +98,33 @@ CREATE TABLE IF NOT EXISTS public.auth_accounts (
   ativo BOOLEAN NOT NULL DEFAULT true,
   created_at TEXT NOT NULL
 );
+
+-- 8. Tabela de Laudos Técnicos Periciais (Relacionamento 1:1 ESTRITO com service_orders)
+CREATE TABLE IF NOT EXISTS public.technical_reports (
+  id TEXT PRIMARY KEY,
+  service_order_id TEXT NOT NULL UNIQUE REFERENCES public.service_orders(id) ON DELETE CASCADE,
+  diagnostico TEXT NOT NULL,
+  servico_realizado TEXT NOT NULL,
+  pecas_utilizadas TEXT,
+  observacao_tecnica TEXT,
+  tecnico_responsavel TEXT NOT NULL,
+  data_analise TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_technical_reports_order_id ON public.technical_reports(service_order_id);
+
+-- 9. Tabela de Histórico Persistente de Transições de Status (Relacionamento 1:N com service_orders)
+CREATE TABLE IF NOT EXISTS public.service_order_status_history (
+  id TEXT PRIMARY KEY,
+  service_order_id TEXT NOT NULL REFERENCES public.service_orders(id) ON DELETE CASCADE,
+  status_anterior TEXT NOT NULL,
+  status_novo TEXT NOT NULL,
+  observacao TEXT,
+  usuario TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_status_history_order_id ON public.service_order_status_history(service_order_id);
 
 -- Inserir Conta Oficial Autorizada
 INSERT INTO public.auth_accounts (id, cnpj, senha, razao_social, nome_fantasia, ativo, created_at)
@@ -95,6 +147,8 @@ ALTER TABLE public.service_orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.maintenance_expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.auth_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.technical_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.service_order_status_history ENABLE ROW LEVEL SECURITY;
 
 -- Políticas de acesso livre para o sistema operacional
 CREATE POLICY "Permitir tudo para autenticados e anon" ON public.clients FOR ALL USING (true) WITH CHECK (true);
@@ -102,3 +156,5 @@ CREATE POLICY "Permitir tudo para autenticados e anon" ON public.service_orders 
 CREATE POLICY "Permitir tudo para autenticados e anon" ON public.maintenance_expenses FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Permitir tudo para autenticados e anon" ON public.system_settings FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Permitir tudo para autenticados e anon" ON public.auth_accounts FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Permitir tudo para autenticados e anon" ON public.technical_reports FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Permitir tudo para autenticados e anon" ON public.service_order_status_history FOR ALL USING (true) WITH CHECK (true);

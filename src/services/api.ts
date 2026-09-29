@@ -1,4 +1,4 @@
-import { Client, ServiceOrder, OrderStatus, MaintenanceExpense, AuthUser, ExpenseCategory } from '../types';
+import { Client, ServiceOrder, OrderStatus, MaintenanceExpense, AuthUser, ExpenseCategory, TechnicalReport } from '../types';
 import {
   getSupabaseClients,
   insertSupabaseClient,
@@ -55,6 +55,7 @@ const STORAGE_KEYS = {
   ORDERS: 'ngames_orders_v1',
   SEQ: 'ngames_order_seq_v1',
   EXPENSES: 'ngames_expenses_v1',
+  REPORTS: 'ngames_reports_v1',
 };
 
 const LEGACY_STORAGE_KEYS = {
@@ -551,6 +552,85 @@ export const api = {
 
       const expenses = getLocalData<MaintenanceExpense[]>(STORAGE_KEYS.EXPENSES, []);
       setLocalData(STORAGE_KEYS.EXPENSES, expenses.filter((e) => e.id !== id));
+    }
+  },
+
+  // --- 1:1 TECHNICAL REPORT API (LAUDO TÉCNICO PERICIAL) ---
+  async getTechnicalReport(orderId: string): Promise<TechnicalReport | null> {
+    try {
+      return await fetchJsonOrThrow<TechnicalReport>(`${API_BASE}/orders/${encodeURIComponent(orderId)}/technical-report`);
+    } catch {
+      const reports = getLocalData<TechnicalReport[]>(STORAGE_KEYS.REPORTS, []);
+      return reports.find((r) => r.serviceOrderId === orderId) || null;
+    }
+  },
+
+  async createTechnicalReport(orderId: string, data: Partial<TechnicalReport>): Promise<TechnicalReport> {
+    try {
+      return await fetchJsonOrThrow<TechnicalReport>(`${API_BASE}/orders/${encodeURIComponent(orderId)}/technical-report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+    } catch {
+      const reports = getLocalData<TechnicalReport[]>(STORAGE_KEYS.REPORTS, []);
+      const existing = reports.find((r) => r.serviceOrderId === orderId);
+      if (existing) {
+        throw new Error('A O.S. já possui um Laudo Técnico (1:1).');
+      }
+
+      const newReport: TechnicalReport = {
+        id: `rep-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+        serviceOrderId: orderId,
+        diagnostico: data.diagnostico || '',
+        servicoRealizado: data.servicoRealizado || '',
+        pecasUtilizadas: data.pecasUtilizadas,
+        observacaoTecnica: data.observacaoTecnica,
+        tecnicoResponsavel: data.tecnicoResponsavel || 'Técnico Especialista N! GAMES',
+        dataAnalise: data.dataAnalise || new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      setLocalData(STORAGE_KEYS.REPORTS, [newReport, ...reports.filter((r) => r.serviceOrderId !== orderId)]);
+      return newReport;
+    }
+  },
+
+  async updateTechnicalReport(orderId: string, data: Partial<TechnicalReport>): Promise<TechnicalReport> {
+    try {
+      return await fetchJsonOrThrow<TechnicalReport>(`${API_BASE}/orders/${encodeURIComponent(orderId)}/technical-report`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+    } catch {
+      const reports = getLocalData<TechnicalReport[]>(STORAGE_KEYS.REPORTS, []);
+      const existing = reports.find((r) => r.serviceOrderId === orderId);
+      if (!existing) {
+        throw new Error('Laudo técnico não encontrado para atualização.');
+      }
+      const updated: TechnicalReport = {
+        ...existing,
+        ...data,
+        serviceOrderId: orderId,
+        updatedAt: new Date().toISOString(),
+      };
+      setLocalData(STORAGE_KEYS.REPORTS, reports.map((r) => (r.serviceOrderId === orderId ? updated : r)));
+      return updated;
+    }
+  },
+
+  async deleteTechnicalReport(orderId: string): Promise<boolean> {
+    try {
+      await fetchJsonOrThrow(`${API_BASE}/orders/${encodeURIComponent(orderId)}/technical-report`, {
+        method: 'DELETE',
+      });
+      return true;
+    } catch {
+      const reports = getLocalData<TechnicalReport[]>(STORAGE_KEYS.REPORTS, []);
+      setLocalData(STORAGE_KEYS.REPORTS, reports.filter((r) => r.serviceOrderId !== orderId));
+      return true;
     }
   },
 

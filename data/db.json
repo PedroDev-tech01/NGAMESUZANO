@@ -24,5 +24,19 @@
     }
   ],
   "maintenanceExpenses": [],
-  "nextOrderSeq": 150002
+  "nextOrderSeq": 150002,
+  "technicalReports": [
+    {
+      "id": "rep-mun43jdn-18ces",
+      "serviceOrderId": "ord-1",
+      "diagnostico": "Curto-circuito na linha de 12V da fonte secundária",
+      "servicoRealizado": "Troca de regulador de tensão e capacitores cerâmicos",
+      "pecasUtilizadas": "1x CI regulador, 2x capacitores 10uF",
+      "observacaoTecnica": "Teste de estresse aprovado em 4K",
+      "tecnicoResponsavel": "Técnico Responsável N! Games",
+      "dataAnalise": "2026-09-29T20:11:25.787Z",
+      "createdAt": "2026-09-29T20:11:25.787Z",
+      "updatedAt": "2026-09-29T20:11:26.386Z"
+    }
+  ]
 }

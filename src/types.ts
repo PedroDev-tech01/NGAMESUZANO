@@ -40,6 +40,29 @@ export interface StatusHistoryEntry {
   observacao?: string;
 }
 
+export interface TechnicalReport {
+  id: string;
+  serviceOrderId: string; // Relacionamento 1:1 único com ServiceOrder
+  diagnostico: string;
+  servicoRealizado: string;
+  pecasUtilizadas?: string;
+  observacaoTecnica?: string;
+  tecnicoResponsavel: string;
+  dataAnalise: string; // ISO string
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ServiceOrderStatusHistory {
+  id: string;
+  serviceOrderId: string; // Relacionamento 1:N com ServiceOrder
+  statusAnterior: string;
+  statusNovo: OrderStatus;
+  observacao?: string;
+  usuario?: string;
+  createdAt: string;
+}
+
 export interface ServiceOrder {
   id: string;
   numero: number;
@@ -58,7 +81,7 @@ export interface ServiceOrder {
   serie?: string;
   defeito?: string;
   estadoConsole?: string; // Estado do console / observações estéticas
-  solucao?: string; // Campo descontinuado a pedido do usuário
+  solucao?: string; // Legado para compatibilidade retroativa
   itens?: OrderItem[]; // Suporte a múltiplos itens para manutenção na mesma O.S.
   valor: number;
   maoObra?: number;
@@ -68,6 +91,7 @@ export interface ServiceOrder {
   createdAt: string;
   retornoAt?: string;
   historicoStatus?: StatusHistoryEntry[]; // Log histórico das alterações de status da O.S.
+  technicalReport?: TechnicalReport | null; // Relacionamento 1:1 carregado opcionalmente
 }
 
 export type ExpenseCategory =

@@ -25,7 +25,9 @@ import {
   Share2,
   Check,
   History,
+  FileCheck2,
 } from 'lucide-react';
+import { TechnicalReportModal } from './TechnicalReportModal';
 import { OrderStatusTimeline } from './OrderStatusTimeline';
 import { printOrderDocument, downloadOrderHtml } from '../utils/printDocument';
 import {
@@ -65,6 +67,7 @@ export const OrderPrintModal: React.FC<OrderPrintModalProps> = ({
   const [copiedMessage, setCopiedMessage] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'sheet' | 'timeline'>('sheet');
+  const [showLaudoModal, setShowLaudoModal] = useState(false);
   const autoWhatsAppTriggeredRef = React.useRef(false);
 
   // Reset to sheet view when opening a different order
@@ -286,6 +289,15 @@ export const OrderPrintModal: React.FC<OrderPrintModalProps> = ({
             >
               <History className="w-3.5 h-3.5" />
               <span>Linha do Tempo ({order.historicoStatus?.length || 1})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowLaudoModal(true)}
+              className="px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer bg-[#14171C] text-amber-300 hover:text-amber-200 border border-amber-500/40 hover:bg-amber-950/30"
+              title="Laudo Técnico Pericial Especializado (Relacionamento 1:1 Estrito)"
+            >
+              <FileCheck2 className="w-3.5 h-3.5 text-amber-400" />
+              <span>Laudo Técnico (1:1)</span>
             </button>
           </div>
 
@@ -702,6 +714,14 @@ export const OrderPrintModal: React.FC<OrderPrintModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Modal de Laudo Técnico Pericial (Relacionamento 1:1) */}
+      <TechnicalReportModal
+        isOpen={showLaudoModal}
+        order={order}
+        client={client}
+        onClose={() => setShowLaudoModal(false)}
+      />
     </div>
   );
 };

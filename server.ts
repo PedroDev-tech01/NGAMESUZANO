@@ -4,7 +4,9 @@ import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { INITIAL_CLIENTS, INITIAL_ORDERS } from './src/data/initialData';
-import { Client, ServiceOrder, OrderStatus, MaintenanceExpense } from './src/types';
+import { Client, ServiceOrder, OrderStatus, MaintenanceExpense, TechnicalReport } from './src/types';
+import { SupabaseTechnicalReportDAO } from './src/dao/SupabaseTechnicalReportDAO';
+import { TechnicalReportController } from './src/controllers/TechnicalReportController';
 import {
   validateCPF,
   validatePhone,
@@ -48,6 +50,7 @@ interface LocalDatabase {
   clients: Client[];
   orders: ServiceOrder[];
   maintenanceExpenses: MaintenanceExpense[];
+  technicalReports?: TechnicalReport[];
   nextOrderSeq: number;
 }
 
@@ -55,8 +58,13 @@ let dbData: LocalDatabase = {
   clients: [],
   orders: [],
   maintenanceExpenses: [],
+  technicalReports: [],
   nextOrderSeq: 150002,
 };
+
+// DAO and Controller instances (MVC Architecture)
+const technicalReportDAO = new SupabaseTechnicalReportDAO();
+const technicalReportController = new TechnicalReportController(technicalReportDAO);
 
 function ensureDataDirectory() {
   const dir = path.dirname(DB_FILE);
@@ -934,6 +942,75 @@ app.delete('/api/maintenance-expenses/:id', async (req: Request, res: Response) 
   } catch (error: any) {
     console.error('Failed to delete expense:', error);
     res.status(500).json({ error: error.message || 'Erro ao excluir despesa' });
+  }
+});
+
+// --- 1:1 TECHNICAL REPORT ROUTES (LAUDOS TÉCNICOS PERICIAIS - MVC) ---
+app.get('/api/orders/:id/technical-report', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const report = await technicalReportController.getReportByOrderId(id);
+    if (!report) {
+      const local = (dbData.technicalReports || []).find((r) => r.serviceOrderId === id);
+      if (local) return res.json(local);
+      return res.status(404).json({ error: 'Laudo técnico não encontrado para esta ordem de serviço' });
+    }
+    res.json(report);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Erro ao consultar laudo técnico' });
+  }
+});
+
+app.post('/api/orders/:id/technical-report', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { diagnostico, servicoRealizado, pecasUtilizadas, observacaoTecnica, tecnicoResponsavel, dataAnalise } = req.body;
+    const created = await technicalReportController.createReport({
+      serviceOrderId: id,
+      diagnostico,
+      servicoRealizado,
+      pecasUtilizadas,
+      observacaoTecnica,
+      tecnicoResponsavel,
+      dataAnalise,
+    });
+
+    if (!dbData.technicalReports) dbData.technicalReports = [];
+    dbData.technicalReports = [created, ...dbData.technicalReports.filter((r) => r.serviceOrderId !== id)];
+    saveData(dbData);
+    res.status(201).json(created);
+  } catch (error: any) {
+    const isConflict = error.message?.includes('1:1') || error.message?.includes('violada');
+    res.status(isConflict ? 409 : 400).json({ error: error.message || 'Erro ao emitir laudo técnico' });
+  }
+});
+
+app.put('/api/orders/:id/technical-report', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updated = await technicalReportController.updateReport(id, req.body);
+
+    if (!dbData.technicalReports) dbData.technicalReports = [];
+    dbData.technicalReports = dbData.technicalReports.map((r) => (r.serviceOrderId === id ? updated : r));
+    saveData(dbData);
+    res.json(updated);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || 'Erro ao atualizar laudo técnico' });
+  }
+});
+
+app.delete('/api/orders/:id/technical-report', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await technicalReportController.deleteReport(id);
+
+    if (dbData.technicalReports) {
+      dbData.technicalReports = dbData.technicalReports.filter((r) => r.serviceOrderId !== id);
+      saveData(dbData);
+    }
+    res.json({ success: true, message: 'Laudo técnico excluído com sucesso' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Erro ao excluir laudo técnico' });
   }
 });
 
