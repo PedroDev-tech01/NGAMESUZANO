@@ -8,34 +8,34 @@ Sistema full-stack para gerenciamento de assistência técnica especializada em 
 
 ### Navegação rápida
 
-[Funcionalidades](#-funcionalidades) • [Arquitetura](#-arquitetura) • [Design Patterns](#-design-patterns) • [Requisitos acadêmicos](#-requisitos-acadêmicos-atendidos) • [API](#-api-rest) • [Segurança](#-segurança) • [Testes](#-testes-e-qualidade) • [Como executar](#-como-executar) • [Diagramas](#-diagramas-e-documentação)
+[Funcionalidades](#-funcionalidades) • [Tecnologias](#-tecnologias) • [Arquitetura & Patterns](#-arquitetura-e-design-patterns) • [Mapeamento dos requisitos](#-mapeamento-dos-requisitos-do-projeto) • [API](#-api-rest) • [Segurança](#-segurança) • [Testes](#-testes-e-qualidade) • [Como executar](#-como-executar) • [Documentação](#-diagramas-e-documentação)
 
 ---
 
 ## 🎯 Sobre o projeto
 
-O sistema foi desenvolvido para atender às demandas operacionais da assistência técnica **N! Games**, proporcionando controle desde a recepção do equipamento até sua entrega ao cliente.
+O sistema foi desenvolvido para atender às demandas operacionais da assistência técnica **N! Games**, proporcionando controle de ponta a ponta desde a recepção do equipamento até a entrega ao cliente.
 
-A aplicação centraliza dados de clientes, ordens de serviço, laudos técnicos, histórico de alterações e despesas, mantendo rastreabilidade das principais ações realizadas no sistema.
+A aplicação centraliza dados de clientes, ordens de serviço, laudos técnicos, histórico de alterações e despesas, mantendo rastreabilidade total das ações realizadas no sistema.
 
 ### Objetivo
 
-Fornecer uma solução full-stack organizada e desacoplada, aplicando conceitos estudados em Engenharia de Software e utilizando padrões de projeto para separar interface, controladores, regras de negócio e persistência.
+Fornecer uma solução full-stack organizada, robusta e desacoplada, aplicando conceitos fundamentais de Engenharia de Software e padrões de projeto GoF para separar interface, controladores, regras de negócio e persistência.
 
 ---
 
 ## ✨ Funcionalidades
 
-- **Gestão de Clientes — CRUD completo:** cadastro, consulta, atualização e exclusão, com validação de CPF, telefone e endereço.
-- **Ordens de Serviço — CRUD completo:** cadastro detalhado com mais de 20 atributos de domínio.
-- **Numeração Sequencial de O.S.:** geração incremental e persistida do número de cada nova ordem de serviço.
-- **Laudo Técnico Pericial — relacionamento 1:1:** cada O.S. pode possuir no máximo um laudo técnico.
-- **Histórico de Status — relacionamento 1:N:** cada mudança de situação gera rastreabilidade cronológica.
-- **Automação de negócio:** atualização automática de datas, retorno com defeito, retirada e garantia.
-- **Emissão de PDF:** geração de documento vetorial para impressão e atendimento ao cliente.
-- **Integração com WhatsApp:** preparação de mensagens com informações da ordem.
-- **Controle de Despesas e Manutenção:** registro de custos de peças, insumos e manutenção.
-- **Autenticação segura:** senhas com bcrypt e autenticação via JWT no backend.
+- **Gestão de Clientes — CRUD completo:** cadastro com validação de CPF (dígitos verificadores), telefone e endereço.
+- **Ordens de Serviço — CRUD completo:** cadastro com mais de 20 atributos de domínio (console, modelo, número de série, estado estético, acessórios, defeito relatado e valores).
+- **Numeração Sequencial de O.S.:** geração incremental e atômica para cada nova ordem de serviço.
+- **Laudo Técnico Pericial — relacionamento 1:1:** parecer técnico estruturado com diagnóstico e componentes substituídos, com unicidade estrita por O.S.
+- **Histórico de Status — relacionamento 1:N:** rastreabilidade cronológica auditada de cada transição de situação.
+- **Automação de negócio:** atualização automática de datas de conclusão, retorno com defeito, retirada e prazo de garantia legal (90 dias - CDC).
+- **Emissão de PDF:** geração de documento vetorial A4 para impressão de balcão e via do cliente.
+- **Integração com WhatsApp:** notificações pré-formatadas prontas para envio com dados da ordem.
+- **Controle de Despesas e Manutenção:** registro financeiro de custos de peças e insumos.
+- **Autenticação segura:** senhas com hash bcrypt e sessões via JSON Web Token (JWT).
 
 ---
 
@@ -46,110 +46,61 @@ Fornecer uma solução full-stack organizada e desacoplada, aplicando conceitos 
 | **Frontend** | React 19, TypeScript, Tailwind CSS, Lucide React |
 | **Backend** | Node.js, Express, TypeScript, tsx, esbuild |
 | **Banco de Dados** | PostgreSQL / Supabase |
-| **Segurança** | bcryptjs, JSON Web Token, Zod, Row Level Security |
+| **Segurança** | bcryptjs, JSON Web Token (JWT), Zod, Row Level Security (RLS) |
 | **Testes** | Vitest |
-| **Build** | Vite 6, esbuild |
-| **CI** | GitHub Actions |
+| **Build & CI** | Vite 6, esbuild, GitHub Actions |
 
 ---
 
-## 🏗 Arquitetura
+## 🏗 Arquitetura e Design Patterns
 
-O sistema utiliza **Model-View-Controller (MVC)** em conjunto com camadas de domínio, Commands, Factory e DAOs.
+O sistema adota uma arquitetura em camadas orientada a objetos, combinando o padrão **Model-View-Controller (MVC)** com padrões táticos GoF e persistência desacoplada.
 
-### Fluxo principal
+### Fluxo de execução
 
 ```text
-React View
+React View (SPA)
     ↓
-API Service (api.ts)
+API Service (src/services/api.ts)
     ↓
-Express Router + JWT Middleware
+Express Router + JWT Middleware (requireAuth)
     ↓
-Controller
+Controller (ServiceOrderController / ClientController)
     ↓
-Factory Method
+Factory Method (ServiceOrderCommandFactory)
     ↓
-Command
+Command (ICommand: Create, Update, Delete, List...)
     ↓
-Builder / Business Service
+Builder / Business Service (ServiceOrderBuilder / ServiceOrderBusinessService)
     ↓
-DAO
+DAO (IServiceOrderDAO / IClientDAO)
     ↓
-PostgreSQL / Supabase
+PostgreSQL / Supabase (Persistência com RLS)
 ```
 
-### MVC
+### Padrões de Projeto e Conceitos OO
 
-- **Model:** modelos de domínio e tipos TypeScript responsáveis pela representação e integridade dos dados.
-- **View:** componentes React responsáveis pela interface e interação com o usuário.
-- **Controller:** `ServiceOrderController`, `ClientController` e `TechnicalReportController`, responsáveis pela orquestração dos fluxos da aplicação.
-
-A descrição completa da arquitetura está em [`ARCHITECTURE.md`](./ARCHITECTURE.md).
-
----
-
-## 🧠 Orientação a Objetos
-
-O projeto aplica os principais conceitos de Orientação a Objetos:
-
-- **Abstração:** contratos definidos através de interfaces como `ICommand`, `IServiceOrderDAO`, `IClientDAO`, `ITechnicalReportDAO` e `IStatusHistoryDAO`.
-- **Encapsulamento:** entidades e Builder controlam a construção e alteração dos dados de domínio.
-- **Polimorfismo por Interface:** diferentes Commands implementam o mesmo contrato `ICommand` e podem ser tratados pela Factory através da mesma abstração.
-
----
-
-## 🧩 Design Patterns
-
-### MVC — Model-View-Controller
-
-Separa apresentação, controle da aplicação e modelos de domínio, reduzindo o acoplamento entre interface e regras de negócio.
-
-### DAO — Data Access Object
-
-A persistência é acessada através de interfaces como [`IServiceOrderDAO`](./src/interfaces/IServiceOrderDAO.ts) e [`IClientDAO`](./src/interfaces/IClientDAO.ts), permitindo que as regras de negócio não dependam diretamente do mecanismo de banco de dados.
-
-Implementações principais:
-
-- [`SupabaseServiceOrderDAO`](./src/dao/SupabaseServiceOrderDAO.ts)
-- [`SupabaseClientDAO`](./src/dao/SupabaseClientDAO.ts)
-- [`SupabaseTechnicalReportDAO`](./src/dao/SupabaseTechnicalReportDAO.ts)
-- [`SupabaseStatusHistoryDAO`](./src/dao/SupabaseStatusHistoryDAO.ts)
-
-### Builder — ServiceOrderBuilder
-
-[`ServiceOrderBuilder`](./src/builders/ServiceOrderBuilder.ts) centraliza a construção da entidade `ServiceOrder`, que possui mais de 20 atributos, aplicando valores padrão e validações antes da instanciação final.
-
-### Command
-
-As operações relacionadas ao ciclo de vida da Ordem de Serviço são encapsuladas como objetos executáveis:
-
-- `CreateServiceOrderCommand`
-- `UpdateServiceOrderCommand`
-- `DeleteServiceOrderCommand`
-- `GetServiceOrderByIdCommand`
-- `ListServiceOrdersCommand`
-- `ChangeServiceOrderStatusCommand`
-
-Todos seguem o contrato [`ICommand`](./src/interfaces/ICommand.ts).
-
-### Factory Method — Command Factory & Registry
-
-A [`ServiceOrderCommandFactory`](./src/factories/ServiceOrderCommandFactory.ts) utiliza um registro de `CommandCreator` para fornecer Commands sob demanda sem acoplar o Controller às implementações concretas.
-
-O registro das implementações acontece no Composition Root [`createServiceOrderCommandFactory`](./src/factories/createServiceOrderCommandFactory.ts), permitindo extensão sem modificar a lógica interna da Factory.
+- **MVC (Model-View-Controller):**
+  - **View:** Interface reativa em React, responsável pela apresentação e captura de eventos.
+  - **Controller:** Controladores Express (`ServiceOrderController`, `ClientController`, `TechnicalReportController`) que orquestram requisições e delegam para Commands e DAOs.
+  - **Model:** Modelos de domínio estritos e tipados em TypeScript que garantem integridade das regras.
+- **DAO (Data Access Object):** Desacopla a regra de negócio do mecanismo de banco. O sistema consome interfaces (`IServiceOrderDAO`, `IClientDAO`, `ITechnicalReportDAO`, `IStatusHistoryDAO`), viabilizando a troca da tecnologia de banco sem alterar regras de domínio.
+- **Command:** Cada operação do ciclo de vida da O.S. é isolada em um comando executável que implementa a interface `ICommand` (`CreateServiceOrderCommand`, `UpdateServiceOrderCommand`, `ChangeServiceOrderStatusCommand`, `DeleteServiceOrderCommand`, `GetServiceOrderByIdCommand`, `ListServiceOrdersCommand`).
+- **Factory Method (Registry / Command Creators):** A classe `ServiceOrderCommandFactory` resolve comandos via registro de criadores configurado no Composition Root (`createServiceOrderCommandFactory`), respeitando o Princípio Aberto/Fechado (OCP).
+- **Builder:** `ServiceOrderBuilder` gerencia a construção passo a passo da entidade `ServiceOrder` (com mais de 20 atributos), aplicando valores padrão e validando invariantes antes da instanciação.
+- **Pilares OO:** Contratos bem definidos por interfaces (**Abstração**), propriedades protegidas e mutações controladas (**Encapsulamento**) e tratamento uniforme de comandos pela abstração `ICommand` (**Polimorfismo**).
 
 ---
 
 ## ⚙️ Automação de negócio
 
-As regras automáticas estão centralizadas em [`ServiceOrderBusinessService`](./src/services/ServiceOrderBusinessService.ts).
+As regras de transição e cálculos estão centralizadas em [`ServiceOrderBusinessService`](./src/services/ServiceOrderBusinessService.ts):
 
-1. **Status `Concluído`:** registra automaticamente a data/hora de conclusão.
-2. **Status `Retornou com defeito`:** registra a data do retorno e o motivo informado.
-3. **Retirada do equipamento:** registra o momento de retirada pelo cliente.
-4. **Garantia:** calcula o período associado à retirada do equipamento.
-5. **Histórico:** cada mudança relevante de status gera registro de auditoria.
+1. **Status `Concluído`:** Preenchimento automático da data e hora de conclusão (`saida`).
+2. **Status `Retornou com defeito`:** Registro imediato de `dataRetorno` e obrigatoriedade do motivo da reincidência.
+3. **Retirada do equipamento:** Registro de entrega com ativação dos termos de garantia.
+4. **Garantia Legal CDC:** Cálculo do prazo legal de 90 dias a partir da retirada pelo cliente.
+5. **Auditoria cronológica:** Cada alteração gera um novo registro imutável no histórico da ordem.
 
 ---
 
@@ -157,85 +108,82 @@ As regras automáticas estão centralizadas em [`ServiceOrderBusinessService`](.
 
 | Relacionamento | Cardinalidade | Implementação |
 |---|---:|---|
-| Cliente → Ordens de Serviço | **1:N** | `service_orders.cliente_id` |
-| Ordem de Serviço → Laudo Técnico | **1:1** | `technical_reports.service_order_id UNIQUE` |
+| Cliente → Ordens de Serviço | **1:N** | `service_orders.cliente_id` (chave estrangeira) |
+| Ordem de Serviço → Laudo Técnico | **1:1** | `technical_reports.service_order_id` (com restrição `UNIQUE`) |
 | Ordem de Serviço → Histórico de Status | **1:N** | `service_order_status_history.service_order_id` |
 
-O schema completo está disponível em [`supabase-schema.sql`](./supabase-schema.sql).
+O script DDL completo está disponível em [`supabase-schema.sql`](./supabase-schema.sql).
 
 ---
 
-## 🎓 Requisitos acadêmicos atendidos
+## 🎓 Mapeamento dos requisitos do projeto
 
 | Requisito | Onde está implementado |
 |---|---|
-| **MVC** | Models, componentes React e Controllers separados |
-| **DAO** | `src/interfaces/` + `src/dao/` |
-| **Command** | `src/commands/` |
-| **Factory Method** | `ServiceOrderCommandFactory` + Composition Root |
-| **Builder** | `ServiceOrderBuilder` |
-| **CRUD** | Clientes e Ordens de Serviço |
-| **Automação de negócio** | `ServiceOrderBusinessService` + `ChangeServiceOrderStatusCommand` |
-| **Relacionamento 1:N** | Cliente → Ordens e Ordem → Histórico |
-| **Relacionamento 1:1** | Ordem → Laudo Técnico |
-| **Entidade com 10+ atributos** | `ServiceOrder`, com mais de 20 atributos |
-| **Diagrama de Classes** | [`ARCHITECTURE.md`](./ARCHITECTURE.md) |
-| **Diagrama de Sequência** | [`ARCHITECTURE.md`](./ARCHITECTURE.md) |
-| **Especificação de endpoints** | [`API_DOCUMENTATION.md`](./API_DOCUMENTATION.md) |
-| **Segurança** | JWT, bcrypt, validação, RLS e proteção de rotas |
-| **Testes** | `tests/` + Vitest |
-| **GitHub / versionamento** | Repositório versionado com histórico de commits |
-| **Integração contínua** | `.github/workflows/quality.yml` |
+| **MVC** | Separação entre componentes React (View), rotas/controllers Express (Controller) e modelos TypeScript (Model) |
+| **DAO** | Contratos em `src/interfaces/` e implementações em `src/dao/` |
+| **Command** | Comandos executáveis implementando `ICommand` em `src/commands/` |
+| **Factory Method** | `ServiceOrderCommandFactory` e Composition Root em `src/factories/` |
+| **Builder** | `ServiceOrderBuilder` em `src/builders/ServiceOrderBuilder.ts` |
+| **CRUD Completo** | Clientes (`ClientController` / `SupabaseClientDAO`) e Ordens (`ServiceOrderController` / Commands) |
+| **Automação de negócio** | `ServiceOrderBusinessService` e `ChangeServiceOrderStatusCommand` |
+| **Relacionamento 1:N** | Cliente → Ordens e Ordem → Histórico de Status |
+| **Relacionamento 1:1** | Ordem de Serviço → Laudo Técnico (`technical_reports.service_order_id UNIQUE`) |
+| **Entidade com 10+ atributos** | `ServiceOrder`, modelada com mais de 20 atributos de domínio |
+| **Diagrama de Classes** | Diagrama UML Mermaid documentado em [`ARCHITECTURE.md`](./ARCHITECTURE.md) |
+| **Diagrama de Sequência** | Diagramas de criação e transição de status em [`ARCHITECTURE.md`](./ARCHITECTURE.md) |
+| **Especificação de endpoints** | Tabela REST e payloads em [`API_DOCUMENTATION.md`](./API_DOCUMENTATION.md) |
+| **Segurança** | Autenticação JWT, hash bcryptjs, validação Zod, RLS no PostgreSQL e rotas protegidas |
+| **Testes** | Suíte de testes unitários e de integração com Vitest em `tests/` |
+| **Versionamento** | Repositório Git com histórico organizado de commits |
+| **Integração contínua (CI)** | Pipeline automatizado em `.github/workflows/quality.yml` |
 
 ---
 
 ## 🌐 API REST
 
-A API utiliza autenticação JWT nas rotas protegidas.
-
-Principais endpoints:
+A API disponibiliza endpoints protegidos por autenticação JWT (via header `Authorization: Bearer <token>`):
 
 | Método / Endpoint | Finalidade |
 |---|---|
-| `POST /api/auth/login` | Autenticação e emissão de JWT |
-| `GET /api/health` | Status da API |
-| `/api/clients` | CRUD de clientes |
-| `/api/orders` | CRUD de ordens de serviço |
-| `PATCH /api/orders/:id/status` | Alteração de status e automações |
-| `/api/orders/:id/history` | Histórico de status |
-| `/api/orders/:id/technical-report` | Laudo técnico da ordem |
-| `/api/maintenance-expenses` | Gestão de despesas |
-| `GET /os/:idOrNum.pdf` | Geração protegida do PDF da O.S. |
+| `POST /api/auth/login` | Autenticação e emissão de token JWT |
+| `GET /api/health` | Verificação do status da API e conexão ao banco |
+| `/api/clients` | CRUD completo de clientes e consulta por CPF |
+| `/api/orders` | CRUD de ordens de serviço (criação, listagem, atualização, exclusão) |
+| `PATCH /api/orders/:id/status` | Transição de status com automações de negócio |
+| `GET /api/orders/:id/history` | Histórico cronológico auditado da ordem |
+| `/api/orders/:id/technical-report` | Emissão e consulta do laudo técnico pericial (1:1) |
+| `/api/maintenance-expenses` | Gestão de despesas e peças de manutenção |
+| `GET /os/:idOrNum.pdf` | Emissão segura do documento PDF da ordem |
 
-A especificação detalhada dos payloads e respostas está em [`API_DOCUMENTATION.md`](./API_DOCUMENTATION.md).
+A documentação detalhada de payloads e status codes está em [`API_DOCUMENTATION.md`](./API_DOCUMENTATION.md).
 
 ---
 
 ## 🔐 Segurança
 
-- **bcryptjs:** senhas persistidas como hash bcrypt.
-- **JWT:** tokens assinados no backend com expiração configurada.
-- **`requireAuth`:** middleware de proteção das rotas privadas.
-- **Controle administrativo:** operações sensíveis, como reset de dados, exigem perfil administrativo.
-- **RLS:** políticas de Row Level Security no PostgreSQL/Supabase.
-- **`auth_accounts`:** acesso restrito ao backend através de `service_role`.
-- **Variáveis de ambiente:** segredos e credenciais não são versionados no repositório.
-- **PDF protegido:** documentos associados às ordens exigem autenticação.
+- **Hash de senhas:** Senhas criptografadas exclusivamente com `bcryptjs` (salt rounds 10).
+- **JSON Web Token:** Assinatura com segredo de ambiente e expiração pré-definida.
+- **Middleware `requireAuth`:** Barreira em rotas protegidas no Express contra requisições não autenticadas.
+- **Row Level Security (RLS):** Tabelas protegidas no banco impedindo acesso público anônimo não autorizado.
+- **Controle administrativo:** Operações críticas restritas a credenciais com permissão correspondente.
+- **Isolamento de credenciais:** Segredos e chaves nunca versionados, gerenciados via variáveis de ambiente.
+- **Proteção contra enumeração:** Emissão de PDFs e relatórios exige token válido.
 
 ---
 
 ## 🧪 Testes e qualidade
 
-A suíte utiliza **Vitest** e cobre os principais componentes da arquitetura:
+A suíte automatizada utiliza **Vitest** e valida regras de negócio, criptografia e padrões estruturais:
 
-- `Auth.test.ts`
-- `ServiceOrderCommandFactory.test.ts`
-- `CreateServiceOrderCommand.test.ts`
-- `UpdateServiceOrderCommand.test.ts`
-- `ChangeServiceOrderStatusCommand.test.ts`
-- `ServiceOrderBuilder.test.ts`
-- `TechnicalReport.test.ts`
-- `validation.test.ts`
+- `Auth.test.ts`: Criptografia bcrypt, geração e validação de tokens JWT e middleware de proteção.
+- `ServiceOrderCommandFactory.test.ts`: Registro dinâmico de criadores, resolução de comandos e OCP.
+- `CreateServiceOrderCommand.test.ts`: Execução do comando de criação e persistência do histórico inicial.
+- `UpdateServiceOrderCommand.test.ts`: Atualização de dados técnicos e validação de existência.
+- `ChangeServiceOrderStatusCommand.test.ts`: Automação de datas de conclusão e retorno com defeito.
+- `ServiceOrderBuilder.test.ts`: Validação de invariantes, campos obrigatórios e instanciação da entidade.
+- `TechnicalReport.test.ts`: Regras de negócio e integridade do laudo 1:1.
+- `validation.test.ts`: Validações algorítmicas de CPF, CNPJ, formatos e dados de domínio.
 
 ### Executar testes
 
@@ -243,7 +191,7 @@ A suíte utiliza **Vitest** e cobre os principais componentes da arquitetura:
 npm test
 ```
 
-### Verificação de tipos
+### Verificação estática de tipos
 
 ```bash
 npm run typecheck
@@ -254,10 +202,6 @@ npm run typecheck
 ```bash
 npm run build
 ```
-
-### CI
-
-O workflow [`Quality & CI`](./.github/workflows/quality.yml) executa automaticamente **typecheck, testes e build** em pushes e pull requests direcionados à `main`.
 
 ---
 
@@ -270,7 +214,7 @@ git clone https://github.com/PedroDev-tech01/NGAMESUZANO.git
 cd NGAMESUZANO
 ```
 
-### 2. Instale as dependências
+### 2. Instale as dependências com npm
 
 ```bash
 npm install
@@ -282,15 +226,15 @@ npm install
 cp .env.example .env
 ```
 
-Depois, preencha o `.env` com as credenciais do seu ambiente.
+Edite o arquivo `.env` preenchendo as credenciais do seu ambiente Supabase e segredos de JWT.
 
-### 4. Inicie em desenvolvimento
+### 4. Inicie o servidor de desenvolvimento
 
 ```bash
 npm run dev
 ```
 
-### 5. Gere o build de produção
+### 5. Compilação para produção
 
 ```bash
 npm run build
@@ -301,51 +245,36 @@ npm start
 
 ## 🔑 Variáveis de ambiente
 
-O arquivo [`.env.example`](./.env.example) contém a estrutura esperada.
+Configuradas através do arquivo `.env` (conforme especificado em [`.env.example`](./.env.example)):
 
 | Variável | Finalidade |
 |---|---|
-| `PORT` | Porta do servidor Express |
-| `FRONTEND_URL` | Origem autorizada para CORS |
-| `SUPABASE_URL` | URL da instância Supabase |
+| `PORT` | Porta de execução do servidor Express (padrão: 3000) |
+| `FRONTEND_URL` | Origem autorizada para configuração do CORS |
+| `SUPABASE_URL` | Endpoint da instância Supabase / PostgreSQL |
 | `SUPABASE_ANON_KEY` | Chave pública da instância |
-| `SUPABASE_SERVICE_ROLE_KEY` | Chave privada utilizada apenas pelo backend |
-| `JWT_SECRET` | Segredo para assinatura dos JWTs |
-| `INITIAL_ADMIN_PASSWORD` | Senha utilizada no provisionamento inicial da conta administrativa |
+| `SUPABASE_SERVICE_ROLE_KEY` | Chave privada administrativa utilizada exclusivamente pelo backend |
+| `JWT_SECRET` | Chave secreta para assinatura dos tokens JWT |
+| `INITIAL_ADMIN_PASSWORD` | Senha para provisionamento inicial da conta administrativa |
 
-> Nunca versione arquivos `.env`, senhas ou chaves privadas reais.
+> **Atenção:** Arquivos `.env` reais e credenciais privadas jamais devem ser comitados no controle de versão.
 
 ---
 
 ## ☁️ Deploy
 
-### Frontend
-
-Preparado para deploy estático na **Netlify**, publicando a pasta `dist/` e utilizando as regras SPA definidas em `netlify.toml`.
-
-### Backend
-
-O backend Express deve ser executado em um ambiente Node.js separado. O frontend se comunica com essa API por meio da URL configurada para o ambiente de produção.
+- **Frontend:** Pronto para deploy estático na **Netlify** a partir da pasta `dist/`, com regras de redirecionamento SPA configuradas em `netlify.toml`.
+- **Backend API:** Preparado para execução em contêineres Node.js ou serviços de nuvem com `npm run build && npm start`.
 
 ---
 
 ## 📚 Diagramas e documentação
 
 - 📐 [**Arquitetura, Diagrama de Classes e Diagramas de Sequência**](./ARCHITECTURE.md)
-- 📘 [**Documentação completa da API**](./API_DOCUMENTATION.md)
-- 🗄️ [**Schema PostgreSQL / Supabase**](./supabase-schema.sql)
-- 🧪 [**Testes automatizados**](./tests)
-- ⚙️ [**Workflow de CI**](./.github/workflows/quality.yml)
-
-O arquivo `ARCHITECTURE.md` contém:
-
-- Diagrama de Classes UML;
-- Diagrama de Sequência de criação de Ordem de Serviço;
-- Diagrama de Sequência de alteração de status;
-- arquitetura MVC;
-- Design Patterns;
-- princípios SOLID;
-- relacionamentos do banco.
+- 📘 [**Documentação completa da API REST**](./API_DOCUMENTATION.md)
+- 🗄️ [**Schema DDL PostgreSQL / Supabase**](./supabase-schema.sql)
+- 🧪 [**Suíte de testes automatizados**](./tests)
+- ⚙️ [**Workflow de Integração Contínua (CI)**](./.github/workflows/quality.yml)
 
 ---
 

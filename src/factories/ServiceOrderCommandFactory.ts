@@ -27,9 +27,6 @@ export class ServiceOrderCommandFactory {
     }
   }
 
-  /**
-   * Registra um criador de comando no Registry (Aberto para extensão - OCP).
-   */
   public register<TInput = any, TOutput = any>(
     type: ServiceOrderCommandType | string,
     creator: CommandCreator<TInput, TOutput>
@@ -37,9 +34,6 @@ export class ServiceOrderCommandFactory {
     this.creators.set(type, creator as CommandCreator);
   }
 
-  /**
-   * Resolve e instancia o comando registrado a partir dos creators registrados.
-   */
   public createCommand<TInput = any, TOutput = any>(
     type: ServiceOrderCommandType | string
   ): ICommand<TInput, TOutput> {
@@ -52,16 +46,10 @@ export class ServiceOrderCommandFactory {
     return creator() as ICommand<TInput, TOutput>;
   }
 
-  /**
-   * Verifica se determinado tipo de comando está registrado na fábrica.
-   */
   public hasCommand(type: ServiceOrderCommandType | string): boolean {
     return this.creators.has(type);
   }
 
-  /**
-   * Retorna os identificadores de todos os comandos registrados.
-   */
   public getRegisteredTypes(): string[] {
     return Array.from(this.creators.keys());
   }

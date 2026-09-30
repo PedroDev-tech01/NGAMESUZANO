@@ -77,7 +77,10 @@ async function fetchJsonOrThrow<T>(url: string, init?: RequestInit): Promise<T> 
   }
 
   if (!res.ok) {
-    const errorMsg = data?.error || (data?.details ? JSON.stringify(data.details) : `Erro HTTP ${res.status}`);
+    let errorMsg = data?.error || (data?.details ? JSON.stringify(data.details) : `Erro HTTP ${res.status}`);
+    if (res.status === 404 && !data?.error) {
+      errorMsg = 'Servidor da API não encontrado (HTTP 404). Verifique se o backend está ativo e se a variável VITE_API_URL está configurada.';
+    }
     const error = new Error(errorMsg) as any;
     error.status = res.status;
     error.details = data?.details;

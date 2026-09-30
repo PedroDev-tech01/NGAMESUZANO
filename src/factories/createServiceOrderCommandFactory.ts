@@ -20,10 +20,6 @@ export interface ServiceOrderCommandFactoryDependencies {
   technicalReportDAO?: ITechnicalReportDAO;
 }
 
-/**
- * Função de composição que instancia a ServiceOrderCommandFactory e registra
- * os Command Creators concretos para cada operação de Ordem de Serviço.
- */
 export function createServiceOrderCommandFactory(
   depsOrOrderDAO: ServiceOrderCommandFactoryDependencies | IServiceOrderDAO,
   historyDAO?: IStatusHistoryDAO,
@@ -50,7 +46,6 @@ export function createServiceOrderCommandFactory(
 
   const factory = new ServiceOrderCommandFactory();
 
-  // Registro dinâmico de criadores de comando (Command Creators)
   factory.register('CREATE', () => new CreateServiceOrderCommand(orderDAO, statusHistoryDAO));
   factory.register('UPDATE', () => new UpdateServiceOrderCommand(orderDAO));
   factory.register('DELETE', () => new DeleteServiceOrderCommand(orderDAO, technicalReportDAO, statusHistoryDAO));
