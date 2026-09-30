@@ -96,20 +96,6 @@ CREATE TABLE IF NOT EXISTS public.auth_accounts (
   created_at TEXT NOT NULL DEFAULT (now()::text)
 );
 
-INSERT INTO public.auth_accounts (id, cnpj, senha, razao_social, nome_fantasia, ativo, created_at)
-VALUES (
-  'acc-master-ngames',
-  '34.467.363/0001-53',
-  'Loja3637',
-  'N! GAMES ASSISTÊNCIA TÉCNICA ESPECIALIZADA',
-  'N! GAMES',
-  true,
-  NOW()::text
-)
-ON CONFLICT (cnpj) DO UPDATE SET
-  senha = EXCLUDED.senha,
-  ativo = EXCLUDED.ativo;
-
 ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.service_orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.technical_reports ENABLE ROW LEVEL SECURITY;
