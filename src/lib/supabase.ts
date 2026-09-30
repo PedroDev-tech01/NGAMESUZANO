@@ -85,39 +85,44 @@ export function resetSupabaseClientToDefault(): void {
 }
 
 function getSafeEnvVar(key: string): string | undefined {
-  // 1. Vite browser environment (Netlify, Vercel, client build)
-  try {
-    if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
-      const viteVal = (import.meta as any).env[key] || (import.meta as any).env[`VITE_${key}`];
-      if (viteVal && typeof viteVal === 'string') return viteVal;
-    }
-  } catch {
-    // ignore
-  }
+  // Never allow reading service role or secret keys with VITE_ prefix
+  const isSecretKey = key.includes('SERVICE_ROLE') || key.includes('SECRET');
 
-  // 2. Node.js environment (server.ts)
+  // 1. Node.js environment (server.ts / DAO backend)
   try {
     if (typeof process !== 'undefined' && process.env) {
-      const nodeVal = process.env[key] || process.env[`VITE_${key}`];
+      const nodeVal = process.env[key] || (!isSecretKey ? process.env[`VITE_${key}`] : undefined);
       if (nodeVal && typeof nodeVal === 'string') return nodeVal;
     }
   } catch {
     // ignore
   }
 
+  // 2. Vite browser environment (client build) - never for secret/service_role keys
+  if (!isSecretKey) {
+    try {
+      if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
+        const viteVal = (import.meta as any).env[key] || (import.meta as any).env[`VITE_${key}`];
+        if (viteVal && typeof viteVal === 'string') return viteVal;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   return undefined;
 }
 
 export function resolveSupabaseCredentials(): { url: string; key: string } | null {
-  // Try environment variables first (checking both process.env and Vite import.meta.env)
+  // Try environment variables first (prioritizing backend service_role / secret keys)
   const envUrlCandidate = normalizeSupabaseUrl(getSafeEnvVar('SUPABASE_URL'));
   
   const envKeyCandidate = [
-    cleanCandidateString(getSafeEnvVar('SUPABASE_PUBLISHABLE_KEY')),
-    cleanCandidateString(getSafeEnvVar('SUPABASE_ANON_KEY')),
-    cleanCandidateString(getSafeEnvVar('SUPABASE_KEY')),
     cleanCandidateString(getSafeEnvVar('SUPABASE_SERVICE_ROLE_KEY')),
     cleanCandidateString(getSafeEnvVar('SUPABASE_SECRET_KEY')),
+    cleanCandidateString(getSafeEnvVar('SUPABASE_KEY')),
+    cleanCandidateString(getSafeEnvVar('SUPABASE_ANON_KEY')),
+    cleanCandidateString(getSafeEnvVar('SUPABASE_PUBLISHABLE_KEY')),
   ].find(isValidSupabaseKey);
 
   // If valid environment variables are present, use them
