@@ -523,11 +523,10 @@ export const OrdersListView: React.FC<OrdersListViewProps> = ({
                         <button
                           type="button"
                           onClick={() => setSelectedLaudoOrder(order)}
-                          className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-md border border-amber-500/40 text-amber-300 hover:bg-amber-950/30 cursor-pointer"
-                          title="Laudo Técnico Pericial Especializado (Relacionamento 1:1)"
+                          className="p-1.5 rounded-md border border-[#374151] text-[#9CA3AF] hover:text-white cursor-pointer"
+                          title="Laudo Técnico"
                         >
-                          <FileCheck2 className="w-3.5 h-3.5 text-amber-400" />
-                          <span>Laudo 1:1</span>
+                          <FileCheck2 className="w-4 h-4" />
                         </button>
 
                         <button
@@ -767,11 +766,11 @@ export const OrdersListView: React.FC<OrdersListViewProps> = ({
                           <button
                             type="button"
                             onClick={() => setSelectedLaudoOrder(order)}
-                            className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-md border border-amber-500/40 text-amber-300 hover:text-amber-200 hover:bg-amber-950/30 transition-colors cursor-pointer"
-                            title="Laudo Técnico Pericial Especializado (Relacionamento 1:1 Estrito)"
+                            className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-md border border-[#374151] text-[#9CA3AF] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                            title="Laudo Técnico"
                           >
-                            <FileCheck2 className="w-3.5 h-3.5 text-amber-400" />
-                            <span className="hidden xl:inline text-[11px]">Laudo 1:1</span>
+                            <FileCheck2 className="w-3.5 h-3.5" />
+                            <span className="hidden 2xl:inline text-[11px]">Laudo</span>
                           </button>
 
                           <button
@@ -963,7 +962,7 @@ export const OrdersListView: React.FC<OrdersListViewProps> = ({
         client={selectedLaudoOrder ? clients.find((c) => c.id === selectedLaudoOrder.clienteId) || null : null}
         onClose={() => setSelectedLaudoOrder(null)}
         onSaved={() => {
-          onShowToast?.('Laudo Técnico (1:1) registrado com sucesso!');
+          onShowToast?.('Laudo Técnico salvo com sucesso!');
         }}
       />
     </div>

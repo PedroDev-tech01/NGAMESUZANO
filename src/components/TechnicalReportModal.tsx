@@ -102,7 +102,7 @@ export const TechnicalReportModal: React.FC<TechnicalReportModalProps> = ({
           tecnicoResponsavel: tecnicoResponsavel.trim(),
           dataAnalise: dataAnalise || new Date().toISOString(),
         });
-        setSuccessMsg('Laudo Técnico (1:1) atualizado com sucesso!');
+        setSuccessMsg('Laudo Técnico atualizado com sucesso!');
       } else {
         saved = await api.createTechnicalReport(order.id, {
           diagnostico: diagnostico.trim(),
@@ -112,7 +112,7 @@ export const TechnicalReportModal: React.FC<TechnicalReportModalProps> = ({
           tecnicoResponsavel: tecnicoResponsavel.trim(),
           dataAnalise: dataAnalise || new Date().toISOString(),
         });
-        setSuccessMsg('Laudo Técnico (1:1) emitido e registrado!');
+        setSuccessMsg('Laudo Técnico salvo com sucesso!');
       }
       setReport(saved);
       if (onSaved) onSaved(saved);
@@ -319,13 +319,13 @@ export const TechnicalReportModal: React.FC<TechnicalReportModalProps> = ({
             <form onSubmit={handleSave} className="space-y-4 overflow-y-auto pr-1 flex-1">
               <div className="p-3 bg-[#101216] border border-[#22262E] rounded-lg text-xs text-[#9CA3AF] space-y-1">
                 <div className="flex items-center justify-between text-white font-semibold">
-                  <span>Auditoria & Relacionamento 1:1</span>
+                  <span>Documento Técnico</span>
                   <span className="text-[11px] text-emerald-400 font-mono">
-                    {report ? `✓ Laudo ID: ${report.id}` : 'Sem laudo emitido ainda'}
+                    {report ? `✓ Emitido` : 'Não emitido'}
                   </span>
                 </div>
-                <p className="text-[11.5px] leading-relaxed">
-                  Cada Ordem de Serviço pode ter <strong>no máximo 1 Laudo Técnico pericial</strong> vinculado. O laudo consolida a análise técnica detalhada para auditoria, garantia e documentação oficial da N! Games.
+                <p className="text-[11.5px] leading-relaxed text-[#9CA3AF]">
+                  Laudo pericial opcional para documentação técnica de reparo, garantia ou comprovação ao cliente.
                 </p>
               </div>
 
@@ -458,7 +458,7 @@ export const TechnicalReportModal: React.FC<TechnicalReportModalProps> = ({
                     ) : (
                       <>
                         <Save className="w-3.5 h-3.5" />
-                        <span>{report ? 'Atualizar Laudo' : 'Salvar Laudo 1:1'}</span>
+                        <span>{report ? 'Atualizar Laudo' : 'Salvar Laudo'}</span>
                       </>
                     )}
                   </button>

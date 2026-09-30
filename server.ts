@@ -1,48 +1,56 @@
 import 'dotenv/config';
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
+import bcrypt from 'bcryptjs';
+
 import { INITIAL_CLIENTS, INITIAL_ORDERS } from './src/data/initialData';
-import { Client, ServiceOrder, OrderStatus, MaintenanceExpense, TechnicalReport } from './src/types';
+import { Client, ServiceOrder, MaintenanceExpense, TechnicalReport } from './src/types';
+
+// Domain Architecture (MVC + DAO + Command + Factory + Builder)
+import { SupabaseClientDAO } from './src/dao/SupabaseClientDAO';
+import { SupabaseServiceOrderDAO } from './src/dao/SupabaseServiceOrderDAO';
+import { SupabaseStatusHistoryDAO } from './src/dao/SupabaseStatusHistoryDAO';
 import { SupabaseTechnicalReportDAO } from './src/dao/SupabaseTechnicalReportDAO';
+import { createServiceOrderCommandFactory } from './src/factories/createServiceOrderCommandFactory';
+import { ServiceOrderController } from './src/controllers/ServiceOrderController';
+import { ClientController } from './src/controllers/ClientController';
 import { TechnicalReportController } from './src/controllers/TechnicalReportController';
+
+// Middleware & Security
+import { requireAuth, signToken, AuthRequest } from './src/middleware/auth';
+import { validateBody } from './src/middleware/validate';
 import {
-  validateCPF,
-  validatePhone,
-  formatCPF,
-  formatPhone,
-  onlyDigits,
-  formatCNPJ,
+  LoginSchema,
+  CreateClientSchema,
+  UpdateClientSchema,
+  CreateServiceOrderSchema,
+  UpdateServiceOrderSchema,
+  ChangeStatusSchema,
+  TechnicalReportSchema,
+} from './src/validators/schemas';
+
+import {
   validateCNPJ,
-  formatCurrency,
-  formatDateTime,
-  getOrderValue,
+  formatCNPJ,
+  onlyDigits,
 } from './src/utils/formatters';
 import { isSupabaseConfigured } from './src/lib/supabase';
 import { buildVectorOrderPdf } from './src/utils/vectorPdf';
 import {
-  getSupabaseClients,
-  insertSupabaseClient,
-  updateSupabaseClient,
-  deleteSupabaseClient,
-  getSupabaseOrders,
-  insertSupabaseOrder,
-  updateSupabaseOrder,
-  deleteSupabaseOrder,
   getSupabaseExpenses,
   insertSupabaseExpense,
   deleteSupabaseExpense,
-  getSupabaseNextOrderSeq,
-  incrementSupabaseOrderSeq,
   seedSupabaseIfEmpty,
   ensureAuthAccountInDb,
   findAuthAccount,
+  updateAuthAccountPassword,
   setSupabaseCaches,
 } from './src/db/supabase-repository';
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 const DB_FILE = path.join(process.cwd(), 'data', 'db.json');
 
 // Interface for local database mirror
@@ -61,10 +69,6 @@ let dbData: LocalDatabase = {
   technicalReports: [],
   nextOrderSeq: 150002,
 };
-
-// DAO and Controller instances (MVC Architecture)
-const technicalReportDAO = new SupabaseTechnicalReportDAO();
-const technicalReportController = new TechnicalReportController(technicalReportDAO);
 
 function ensureDataDirectory() {
   const dir = path.dirname(DB_FILE);
@@ -113,21 +117,58 @@ function saveData(data: LocalDatabase) {
 dbData = loadData();
 setSupabaseCaches(dbData.clients, dbData.orders, dbData.maintenanceExpenses, dbData.nextOrderSeq);
 
-// If Supabase is configured, check seeding in background
+// Instantiações Oficiais das Camadas DAO (Acesso a dados)
+const clientDAO = new SupabaseClientDAO(dbData.clients);
+const statusHistoryDAO = new SupabaseStatusHistoryDAO();
+const technicalReportDAO = new SupabaseTechnicalReportDAO();
+const orderDAO = new SupabaseServiceOrderDAO(dbData.orders, dbData.nextOrderSeq);
+
+// Instantiações dos Controllers e Factory (MVC + GoF Design Patterns)
+const serviceOrderCommandFactory = createServiceOrderCommandFactory({
+  orderDAO,
+  statusHistoryDAO,
+  technicalReportDAO,
+});
+const serviceOrderController = new ServiceOrderController(serviceOrderCommandFactory);
+const clientController = new ClientController(clientDAO);
+const technicalReportController = new TechnicalReportController(technicalReportDAO);
+
+// Inicializar banco / seeding se configurado
 if (isSupabaseConfigured()) {
-  console.log('[Supabase] Configured! Checking table seeding and auth account...');
+  console.log('[Supabase] Configurado. Inicializando contas e sincronização...');
   ensureAuthAccountInDb().catch((err) => {
-    console.warn('[Supabase] Background auth ensure error:', err);
+    console.warn('[Supabase] Aviso ao verificar conta de autenticação:', err);
   });
   seedSupabaseIfEmpty(dbData.clients, dbData.orders, dbData.maintenanceExpenses, dbData.nextOrderSeq).catch((err) => {
-    console.warn('[Supabase] Background seed error:', err);
+    console.warn('[Supabase] Aviso ao verificar dados iniciais:', err);
   });
-} else {
-  console.log('[Storage] Supabase not configured yet. Using local storage (/data/db.json).');
 }
 
-// Middleware
+// Middlewares Globais
 app.use(express.json());
+
+// CORS Policy Middleware
+app.use((req, res, next) => {
+  const allowedOrigin = process.env.FRONTEND_URL || '*';
+  const origin = req.headers.origin;
+
+  if (process.env.NODE_ENV === 'production' && process.env.FRONTEND_URL) {
+    if (origin === process.env.FRONTEND_URL) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  }
+
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
 
 // Request logging for API routes
 app.use('/api', (req, res, next) => {
@@ -139,399 +180,93 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// --- API ROUTES ---
+// ==============================================================================
+// 1. ROTAS PÚBLICAS
+// ==============================================================================
 
-// Health check & Server Status
+// Health Check Oficial
 app.get('/api/health', async (req: Request, res: Response) => {
   const supabaseActive = isSupabaseConfigured();
-  let totalClients = dbData.clients.length;
-  let totalOrders = dbData.orders.length;
-  let nextSeq = dbData.nextOrderSeq;
-
-  if (supabaseActive) {
-    try {
-      const [sbClients, sbOrders, sbSeq] = await Promise.all([
-        getSupabaseClients().catch(() => null),
-        getSupabaseOrders().catch(() => null),
-        getSupabaseNextOrderSeq().catch(() => null),
-      ]);
-      if (sbClients) totalClients = sbClients.length;
-      if (sbOrders) totalOrders = sbOrders.length;
-      if (typeof sbSeq === 'number') nextSeq = sbSeq;
-    } catch (e) {
-      console.warn('[Supabase] Error polling health stats:', e);
-    }
-  }
-
   res.json({
     status: 'ok',
+    database: supabaseActive ? 'connected' : 'connected_local',
     server: 'N! GAMES Tech Backend',
-    engine: supabaseActive ? 'Supabase (PostgreSQL Cloud)' : 'Armazenamento Local JSON (/data/db.json)',
-    supabaseConnected: supabaseActive,
     uptime: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
-    database: {
-      totalClients,
-      totalOrders,
-      nextOrderSeq: nextSeq,
-    },
   });
 });
 
-// Authentication endpoints
-app.post('/api/auth/login', async (req: Request, res: Response) => {
-  const { cnpj, senha } = req.body || {};
+// Autenticação Segura com Bcrypt e JWT
+app.post('/api/auth/login', validateBody(LoginSchema), async (req: Request, res: Response) => {
+  const { cnpj, senha } = req.body;
   const cleanCnpj = onlyDigits(cnpj);
-
-  if (!cleanCnpj || cleanCnpj.length < 14) {
-    return res.status(400).json({ error: 'CNPJ incompleto (deve conter 14 dígitos).' });
-  }
 
   const cnpjVal = validateCNPJ(cleanCnpj);
   if (!cnpjVal.isValid) {
     return res.status(400).json({ error: cnpjVal.error || 'CNPJ inválido pelos dígitos verificadores.' });
   }
 
-  const cleanSenha = String(senha || '').trim();
-  if (!cleanSenha) {
-    return res.status(400).json({ error: 'Informe a senha de acesso.' });
-  }
-
-  // Look up authorized account in database
   const account = await findAuthAccount(cleanCnpj);
   if (!account || !account.active) {
     return res.status(401).json({
-      error: 'Conta não cadastrada ou não autorizada. Apenas contas registradas no sistema têm permissão de acesso.',
+      error: 'Conta não cadastrada ou não autorizada. Apenas contas registradas têm permissão de acesso.',
     });
   }
 
-  if (account.senha !== cleanSenha) {
-    return res.status(401).json({
-      error: 'Senha incorreta para esta conta.',
-    });
+  // Validação segura com bcrypt (com migração retroativa transparente se estiver em texto puro)
+  let isPasswordValid = false;
+  if (account.senha.startsWith('$2a$') || account.senha.startsWith('$2b$')) {
+    isPasswordValid = await bcrypt.compare(senha, account.senha);
+  } else {
+    isPasswordValid = account.senha === senha;
+    if (isPasswordValid) {
+      // Migração automática de senha em texto puro para hash bcrypt seguro
+      const upgradedHash = await bcrypt.hash(senha, 10);
+      await updateAuthAccountPassword(cleanCnpj, upgradedHash);
+    }
   }
+
+  if (!isPasswordValid) {
+    return res.status(401).json({ error: 'Senha incorreta para esta conta.' });
+  }
+
+  const token = signToken({
+    cnpj: formatCNPJ(cleanCnpj),
+    nomeFantasia: account.nomeFantasia,
+    razaoSocial: account.razaoSocial,
+    role: account.role || 'admin',
+  });
 
   const user = {
     cnpj: formatCNPJ(cleanCnpj),
     razaoSocial: account.razaoSocial,
     nomeFantasia: account.nomeFantasia,
-    token: 'ngames-auth-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
+    token,
     loggedAt: new Date().toISOString(),
   };
 
   res.json({
     success: true,
+    token,
     user,
     message: 'Autenticação autorizada com sucesso',
   });
-});
-
-app.post('/api/auth/firebase', (req: Request, res: Response) => {
-  res.json({ success: true, message: 'Autenticação recebida com sucesso' });
 });
 
 app.post('/api/auth/logout', (req: Request, res: Response) => {
   res.json({ success: true, message: 'Sessão encerrada com sucesso' });
 });
 
-// Full state bootstrap
-app.get('/api/bootstrap', async (req: Request, res: Response) => {
-  if (isSupabaseConfigured()) {
-    try {
-      const [clientsList, ordersList, expensesList, nextSeq] = await Promise.all([
-        getSupabaseClients(),
-        getSupabaseOrders(),
-        getSupabaseExpenses(),
-        getSupabaseNextOrderSeq(),
-      ]);
-
-      // Keep local mirror updated
-      dbData = {
-        clients: clientsList,
-        orders: ordersList,
-        maintenanceExpenses: expensesList,
-        nextOrderSeq: nextSeq,
-      };
-      saveData(dbData);
-
-      return res.json({
-        clients: clientsList,
-        orders: ordersList,
-        maintenanceExpenses: expensesList,
-        nextOrderSeq: nextSeq,
-        source: 'supabase',
-        serverTime: new Date().toISOString(),
-      });
-    } catch (error: any) {
-      console.warn('[Supabase] Bootstrap fallback to local mirror due to error:', error.message);
-    }
-  }
-
-  // Fallback to local
-  res.json({
-    clients: dbData.clients,
-    orders: dbData.orders,
-    maintenanceExpenses: dbData.maintenanceExpenses || [],
-    nextOrderSeq: dbData.nextOrderSeq,
-    source: 'local',
-    serverTime: new Date().toISOString(),
-  });
-});
-
-// --- CLIENTS ENDPOINTS ---
-app.get('/api/clients', async (req: Request, res: Response) => {
-  if (isSupabaseConfigured()) {
-    try {
-      const clientsList = await getSupabaseClients();
-      return res.json(clientsList);
-    } catch (e: any) {
-      console.warn('[Supabase] Failed get clients, using local:', e.message);
-    }
-  }
-  res.json(dbData.clients);
-});
-
-// Search client directly by CPF
-app.get('/api/clients/by-cpf/:cpf', async (req: Request, res: Response) => {
-  const clean = onlyDigits(req.params.cpf);
-  if (!clean) {
-    return res.status(400).json({ error: 'CPF inválido para busca' });
-  }
-
-  let list = dbData.clients;
-  if (isSupabaseConfigured()) {
-    try {
-      list = await getSupabaseClients();
-    } catch {}
-  }
-
-  const client = list.find((c) => c.id === `cpf-${clean}` || onlyDigits(c.cpf) === clean);
-  if (!client) {
-    return res.status(404).json({ error: 'Cliente não encontrado com este CPF' });
-  }
-  res.json(client);
-});
-
-app.post('/api/clients', async (req: Request, res: Response) => {
-  try {
-    const { nome, cpf, telefone, email, nascimento, endereco, cep, obs } = req.body;
-    if (!cpf || !telefone) {
-      return res.status(400).json({ error: 'CPF e telefone são obrigatórios' });
-    }
-
-    const cpfValidation = validateCPF(String(cpf));
-    if (!cpfValidation.isValid) {
-      return res.status(400).json({ error: cpfValidation.error || 'CPF inválido' });
-    }
-
-    const cpfDigits = onlyDigits(String(cpf));
-    const canonicalId = `cpf-${cpfDigits}`;
-
-    let currentClients = dbData.clients;
-    if (isSupabaseConfigured()) {
-      try {
-        currentClients = await getSupabaseClients();
-      } catch {}
-    }
-
-    const duplicate = currentClients.find(
-      (c) => c.id === canonicalId || onlyDigits(c.cpf) === cpfDigits
-    );
-    if (duplicate) {
-      return res.status(400).json({
-        error: `Já existe um cliente cadastrado com este CPF (${duplicate.nome}). O CPF é um ID único no sistema.`,
-        client: duplicate,
-      });
-    }
-
-    const phoneValidation = validatePhone(String(telefone));
-    if (!phoneValidation.isValid) {
-      return res.status(400).json({ error: phoneValidation.error || 'Telefone inválido' });
-    }
-
-    const cleanNome = (nome || '').trim();
-    const finalNome = cleanNome
-      ? cleanNome.toUpperCase()
-      : `CLIENTE (${formatCPF(String(cpf).trim())})`;
-
-    const newClient: Client = {
-      id: canonicalId,
-      nome: finalNome,
-      cpf: formatCPF(String(cpf).trim()),
-      telefone: formatPhone(String(telefone).trim()),
-      cep: cep ? String(cep).trim() : undefined,
-      email: email ? String(email).trim() : undefined,
-      nascimento: nascimento ? String(nascimento).trim() : undefined,
-      endereco: endereco ? String(endereco).trim() : undefined,
-      obs: obs ? String(obs).trim() : undefined,
-      createdAt: new Date().toISOString(),
-    };
-
-    if (isSupabaseConfigured()) {
-      await insertSupabaseClient(newClient);
-    }
-
-    // Mirror to local
-    dbData.clients.push(newClient);
-    saveData(dbData);
-    res.status(201).json(newClient);
-  } catch (error: any) {
-    console.error('Failed to create client:', error);
-    res.status(500).json({ error: error.message || 'Erro ao criar cliente' });
-  }
-});
-
-app.put('/api/clients/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    let currentClients = dbData.clients;
-    if (isSupabaseConfigured()) {
-      try {
-        currentClients = await getSupabaseClients();
-      } catch {}
-    }
-
-    const existing = currentClients.find((c) => c.id === id);
-    if (!existing) {
-      return res.status(404).json({ error: 'Cliente não encontrado' });
-    }
-
-    let formattedCpf = existing.cpf;
-    if (req.body.cpf && req.body.cpf !== existing.cpf) {
-      const cpfValidation = validateCPF(String(req.body.cpf));
-      if (!cpfValidation.isValid) {
-        return res.status(400).json({ error: cpfValidation.error || 'CPF inválido' });
-      }
-      const newDigits = onlyDigits(String(req.body.cpf));
-      const targetCanonicalId = `cpf-${newDigits}`;
-      const duplicate = currentClients.find(
-        (c) => c.id !== id && (c.id === targetCanonicalId || onlyDigits(c.cpf) === newDigits)
-      );
-      if (duplicate) {
-        return res.status(400).json({
-          error: `Já existe um cliente cadastrado com este CPF (${duplicate.nome}). O CPF é um ID único.`,
-        });
-      }
-      formattedCpf = formatCPF(String(req.body.cpf).trim());
-    }
-
-    let formattedPhone = existing.telefone;
-    if (req.body.telefone && req.body.telefone !== existing.telefone) {
-      const phoneValidation = validatePhone(String(req.body.telefone));
-      if (!phoneValidation.isValid) {
-        return res.status(400).json({ error: phoneValidation.error || 'Telefone inválido' });
-      }
-      formattedPhone = formatPhone(String(req.body.telefone).trim());
-    }
-
-    const payload: Partial<Client> = {
-      ...req.body,
-      nome: req.body.nome !== undefined && req.body.nome !== null
-        ? (String(req.body.nome).trim() ? String(req.body.nome).trim().toUpperCase() : existing.nome)
-        : existing.nome,
-      cpf: formattedCpf,
-      telefone: formattedPhone,
-      cep: req.body.cep !== undefined ? (req.body.cep ? String(req.body.cep).trim() : undefined) : existing.cep,
-    };
-
-    let updated = { ...existing, ...payload };
-    if (isSupabaseConfigured()) {
-      updated = await updateSupabaseClient(id, payload);
-    }
-
-    // Mirror to local
-    const localIdx = dbData.clients.findIndex((c) => c.id === id);
-    if (localIdx !== -1) {
-      dbData.clients[localIdx] = updated;
-    } else {
-      dbData.clients.push(updated);
-    }
-    saveData(dbData);
-    res.json(updated);
-  } catch (error: any) {
-    console.error('Failed to update client:', error);
-    res.status(500).json({ error: error.message || 'Erro ao atualizar cliente' });
-  }
-});
-
-app.delete('/api/clients/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    if (isSupabaseConfigured()) {
-      await deleteSupabaseClient(id);
-    }
-    dbData.clients = dbData.clients.filter((c) => c.id !== id);
-    dbData.orders = dbData.orders.filter((o) => o.clienteId !== id);
-    saveData(dbData);
-    res.json({ success: true, message: 'Cliente excluído com sucesso' });
-  } catch (error: any) {
-    console.error('Failed to delete client:', error);
-    res.status(500).json({ error: error.message || 'Erro ao excluir cliente' });
-  }
-});
-
-// --- ORDERS ENDPOINTS ---
-app.get('/api/orders', async (req: Request, res: Response) => {
-  if (isSupabaseConfigured()) {
-    try {
-      const ordersList = await getSupabaseOrders();
-      return res.json(ordersList);
-    } catch (e: any) {
-      console.warn('[Supabase] Failed get orders, using local:', e.message);
-    }
-  }
-  res.json(dbData.orders);
-});
-
-app.get('/api/orders/:id', async (req: Request, res: Response) => {
-  const { id } = req.params;
-  let currentOrders = dbData.orders;
-  if (isSupabaseConfigured()) {
-    try {
-      currentOrders = await getSupabaseOrders();
-    } catch {}
-  }
-  const order = currentOrders.find((o) => o.id === id || String(o.numero) === id);
-  if (!order) {
-    return res.status(404).json({ error: 'Ordem de serviço não encontrada' });
-  }
-  res.json(order);
-});
-
-// Helper to safely escape HTML strings for server-rendered pages
-function escapeHtml(str?: any): string {
-  if (str === undefined || str === null) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
+// Stream de PDF Oficial da Ordem de Serviço (Público para download / envio ao cliente)
 async function findOrderAndClient(idOrNum: string) {
   const clean = String(idOrNum).replace(/\.pdf$/i, '').trim();
-  let currentOrders = dbData.orders;
-  if (isSupabaseConfigured()) {
-    try {
-      currentOrders = await getSupabaseOrders();
-    } catch {}
-  }
-  const order = currentOrders.find((o) => o.id === clean || String(o.numero) === clean);
+  const order = await orderDAO.findById(clean);
   if (!order) return { order: null, client: null };
-
-  let currentClients = dbData.clients;
-  if (isSupabaseConfigured()) {
-    try {
-      currentClients = await getSupabaseClients();
-    } catch {}
-  }
-  const client = currentClients.find((c) => c.id === order.clienteId) || null;
+  const client = await clientDAO.findById(order.clienteId);
   return { order, client };
 }
 
-// Stream direct vector PDF for order viewing or download (/os/:idOrNum, /os/:idOrNum.pdf, or /api/orders/:id/pdf)
-app.get(['/os/:idOrNum', '/os/:idOrNum.pdf', '/api/orders/:id/pdf'], async (req: Request, res: Response) => {
+app.get(['/os/:idOrNum', '/os/:idOrNum.pdf', '/api/orders/:id/pdf'], requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const idOrNum = req.params.idOrNum || req.params.id;
     const { order, client } = await findOrderAndClient(idOrNum);
@@ -552,352 +287,258 @@ app.get(['/os/:idOrNum', '/os/:idOrNum.pdf', '/api/orders/:id/pdf'], async (req:
   }
 });
 
-// Friendly redirect for short order links: /ordem/:id -> /os/:id.pdf
-app.get('/ordem/:id', (req: Request, res: Response) => {
+app.get('/ordem/:id', requireAuth, (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  res.redirect(`/os/${encodeURIComponent(id)}.pdf`);
+  const tokenQuery = req.query.token ? `?token=${encodeURIComponent(String(req.query.token))}` : '';
+  res.redirect(`/os/${encodeURIComponent(id)}.pdf${tokenQuery}`);
 });
 
-app.post('/api/orders', async (req: Request, res: Response) => {
+// ==============================================================================
+// 2. ROTAS PROTEGIDAS (Exigem requireAuth com JWT válido)
+// ==============================================================================
+
+// Estado completo inicial (Bootstrap autenticado)
+app.get('/api/bootstrap', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const {
-      clienteId,
-      situacao,
-      canal,
-      entrada,
-      prazo,
-      saida,
-      dataRetirada,
-      dataRetorno,
-      motivoRetorno,
-      equipamento,
-      marca,
-      modelo,
-      serie,
-      defeito,
-      solucao,
-      itens,
-      valor,
-      maoObra,
-      pecas,
-      desconto,
-      obs,
-    } = req.body;
+    const [clientsList, ordersList, expensesList] = await Promise.all([
+      clientDAO.findAll(),
+      orderDAO.findAll(),
+      isSupabaseConfigured() ? getSupabaseExpenses().catch(() => dbData.maintenanceExpenses) : Promise.resolve(dbData.maintenanceExpenses),
+    ]);
 
-    if (!clienteId || (!equipamento && (!itens || itens.length === 0))) {
-      return res.status(400).json({ error: 'Cliente e Equipamento são campos obrigatórios' });
-    }
+    const nextSeq = Math.max(...ordersList.map((o) => o.numero), 150001) + 1;
 
-    let orderNum = dbData.nextOrderSeq;
-    if (isSupabaseConfigured()) {
-      try {
-        orderNum = await incrementSupabaseOrderSeq();
-      } catch {
-        orderNum = dbData.nextOrderSeq;
-        dbData.nextOrderSeq += 1;
-      }
-    } else {
-      dbData.nextOrderSeq += 1;
-    }
-
-    const primaryEquip = equipamento
-      ? String(equipamento).trim()
-      : (itens && itens[0]?.equipamento ? String(itens[0].equipamento).trim() : 'Equipamento');
-
-    const newOrder: ServiceOrder = {
-      id: `ord-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      numero: orderNum,
-      clienteId,
-      situacao: situacao || 'Em aberto',
-      canal: canal || 'Presencial',
-      entrada: entrada || new Date().toISOString(),
-      prazo: prazo ? String(prazo).trim() : undefined,
-      saida: saida || undefined,
-      dataRetirada: dataRetirada
-        ? String(dataRetirada).trim()
-        : (situacao === 'Concluído' && req.body.marcarRetirada ? new Date().toISOString() : undefined),
-      dataRetorno: dataRetorno
-        ? String(dataRetorno).trim()
-        : (situacao === 'Retornou com defeito' ? (req.body.retornoAt || new Date().toISOString()) : undefined),
-      motivoRetorno: motivoRetorno ? String(motivoRetorno).trim() : undefined,
-      equipamento: primaryEquip,
-      marca: marca ? String(marca).trim() : undefined,
-      modelo: modelo ? String(modelo).trim() : undefined,
-      serie: serie ? String(serie).trim() : undefined,
-      defeito: defeito ? String(defeito).trim() : undefined,
-      solucao: solucao ? String(solucao).trim() : undefined,
-      estadoConsole: req.body.estadoConsole ? String(req.body.estadoConsole).trim() : undefined,
-      itens: Array.isArray(itens) ? itens : undefined,
-      valor: typeof valor === 'number' ? valor : (Number(valor) || 0),
-      maoObra: maoObra !== undefined ? Number(maoObra) : undefined,
-      pecas: pecas !== undefined ? Number(pecas) : undefined,
-      desconto: desconto !== undefined ? Number(desconto) : undefined,
-      obs: obs ? String(obs).trim() : undefined,
-      retornoAt: situacao === 'Retornou com defeito' ? (req.body.retornoAt || dataRetorno || new Date().toISOString()) : undefined,
-      createdAt: new Date().toISOString(),
-      historicoStatus: req.body.historicoStatus || [
-        {
-          id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          de: 'Criada',
-          para: situacao || 'Em aberto',
-          data: entrada || new Date().toISOString(),
-          observacao: 'Abertura da Ordem de Serviço',
-        },
-      ],
-    };
-
-    if (isSupabaseConfigured()) {
-      await insertSupabaseOrder(newOrder);
-    }
-
-    dbData.orders.unshift(newOrder);
-    saveData(dbData);
-    res.status(201).json(newOrder);
+    res.json({
+      clients: clientsList,
+      orders: ordersList,
+      maintenanceExpenses: expensesList || [],
+      nextOrderSeq: nextSeq,
+      serverTime: new Date().toISOString(),
+    });
   } catch (error: any) {
-    console.error('Failed to create order:', error);
-    res.status(500).json({ error: error.message || 'Erro ao criar ordem de serviço' });
+    res.status(500).json({ error: error.message || 'Erro ao carregar dados' });
   }
 });
 
-app.put('/api/orders/:id', async (req: Request, res: Response) => {
+// ------------------------------------------------------------------------------
+// CRUD DE CLIENTES (Via ClientController + ClientDAO)
+// ------------------------------------------------------------------------------
+app.get('/api/clients', requireAuth, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const clients = await clientController.listClients();
+    res.json(clients);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/clients/by-cpf/:cpf', requireAuth, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { cpf } = req.params;
+    const client = await clientController.getClientByCpf(cpf);
+    if (!client) {
+      return res.status(404).json({ error: 'Cliente não encontrado com este CPF' });
+    }
+    res.json(client);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/clients/:id', requireAuth, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    let currentOrders = dbData.orders;
-    if (isSupabaseConfigured()) {
-      try {
-        currentOrders = await getSupabaseOrders();
-      } catch {}
+    const client = await clientController.getClientById(id);
+    if (!client) {
+      return res.status(404).json({ error: 'Cliente não encontrado' });
     }
+    res.json(client);
+  } catch (err) {
+    next(err);
+  }
+});
 
-    const existing = currentOrders.find((o) => o.id === id);
-    if (!existing) {
+app.post('/api/clients', requireAuth, validateBody(CreateClientSchema), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const created = await clientController.createClient(req.body);
+    res.status(201).json(created);
+  } catch (err: any) {
+    if (err.message && err.message.includes('Conflito')) {
+      return res.status(409).json({ error: err.message });
+    }
+    next(err);
+  }
+});
+
+app.put('/api/clients/:id', requireAuth, validateBody(UpdateClientSchema), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const updated = await clientController.updateClient(req.params.id, req.body);
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.delete('/api/clients/:id', requireAuth, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const success = await clientController.deleteClient(req.params.id);
+    if (!success) {
+      return res.status(404).json({ error: 'Cliente não encontrado' });
+    }
+    res.json({ success: true, message: 'Cliente excluído com sucesso' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ------------------------------------------------------------------------------
+// GESTÃO DE ORDENS DE SERVIÇO (Via ServiceOrderController + Factory + Command + Builder + DAO)
+// ------------------------------------------------------------------------------
+app.get('/api/orders', requireAuth, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const orders = await serviceOrderController.listOrders(req.query as any);
+    res.json(orders);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/orders/:id', requireAuth, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const order = await serviceOrderController.getOrderById(req.params.id);
+    if (!order) {
       return res.status(404).json({ error: 'Ordem de serviço não encontrada' });
     }
+    res.json(order);
+  } catch (err) {
+    next(err);
+  }
+});
 
-    const payload: Partial<ServiceOrder> = {
+app.post('/api/orders', requireAuth, validateBody(CreateServiceOrderSchema), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const created = await serviceOrderController.createOrder(req.body);
+    res.status(201).json(created);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.put('/api/orders/:id', requireAuth, validateBody(UpdateServiceOrderSchema), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const updated = await serviceOrderController.updateOrder({
+      id: req.params.id,
       ...req.body,
-      valor: req.body.valor !== undefined ? Number(req.body.valor) : existing.valor,
-      maoObra: req.body.maoObra !== undefined ? Number(req.body.maoObra) : existing.maoObra,
-      pecas: req.body.pecas !== undefined ? Number(req.body.pecas) : existing.pecas,
-      desconto: req.body.desconto !== undefined ? Number(req.body.desconto) : existing.desconto,
-      prazo: req.body.prazo !== undefined ? (req.body.prazo ? String(req.body.prazo).trim() : undefined) : existing.prazo,
-      saida: req.body.saida !== undefined ? (req.body.saida ? String(req.body.saida).trim() : undefined) : existing.saida,
-      dataRetirada: req.body.dataRetirada !== undefined ? (req.body.dataRetirada ? String(req.body.dataRetirada).trim() : undefined) : existing.dataRetirada,
-      dataRetorno: req.body.dataRetorno !== undefined ? (req.body.dataRetorno ? String(req.body.dataRetorno).trim() : undefined) : existing.dataRetorno,
-      motivoRetorno: req.body.motivoRetorno !== undefined ? (req.body.motivoRetorno ? String(req.body.motivoRetorno).trim() : undefined) : existing.motivoRetorno,
-      retornoAt: req.body.situacao === 'Retornou com defeito' ? (req.body.retornoAt || existing.retornoAt || new Date().toISOString()) : existing.retornoAt,
-      itens: req.body.itens !== undefined ? req.body.itens : existing.itens,
-    };
-
-    // Registrar histórico de status se houve mudança de situação
-    if (req.body.situacao && req.body.situacao !== existing.situacao) {
-      const newEntry = {
-        id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        de: existing.situacao,
-        para: req.body.situacao,
-        data: new Date().toISOString(),
-        observacao: req.body.motivoRetorno || (req.body.situacao === 'Concluído' ? 'Serviço concluído' : undefined),
-      };
-      payload.historicoStatus = [
-        ...(Array.isArray(existing.historicoStatus) && existing.historicoStatus.length > 0
-          ? existing.historicoStatus
-          : [
-              {
-                id: `init-${existing.id}`,
-                de: 'Criada',
-                para: existing.situacao,
-                data: existing.entrada || existing.createdAt || new Date().toISOString(),
-                observacao: 'Abertura da O.S.',
-              },
-            ]),
-        newEntry,
-      ];
-    } else if (req.body.historicoStatus !== undefined) {
-      payload.historicoStatus = req.body.historicoStatus;
-    }
-
-    // Integridade do histórico: se a O.S. já estiver com status 'Concluído',
-    // desabilita/bloqueia a alteração de campos principais (equipamento, cliente, data de entrada)
-    if (existing.situacao === 'Concluído') {
-      payload.clienteId = existing.clienteId;
-      payload.entrada = existing.entrada;
-      payload.equipamento = existing.equipamento;
-      payload.marca = existing.marca;
-      payload.modelo = existing.modelo;
-      payload.serie = existing.serie;
-      if (Array.isArray(existing.itens) && existing.itens.length > 0) {
-        payload.itens = existing.itens;
-      }
-    }
-
-    let updated = { ...existing, ...payload };
-    if (isSupabaseConfigured()) {
-      updated = await updateSupabaseOrder(id, payload);
-    }
-
-    const localIdx = dbData.orders.findIndex((o) => o.id === id);
-    if (localIdx !== -1) {
-      dbData.orders[localIdx] = updated;
-    } else {
-      dbData.orders.unshift(updated);
-    }
-    saveData(dbData);
+    });
     res.json(updated);
-  } catch (error: any) {
-    console.error('Failed to update order:', error);
-    res.status(500).json({ error: error.message || 'Erro ao atualizar ordem de serviço' });
+  } catch (err) {
+    next(err);
   }
 });
 
-app.patch('/api/orders/:id/status', async (req: Request, res: Response) => {
+app.patch('/api/orders/:id/status', requireAuth, validateBody(ChangeStatusSchema), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
-    const { situacao } = req.body;
-    if (!situacao) {
-      return res.status(400).json({ error: 'Campo situacao é obrigatório' });
-    }
-
-    let currentOrders = dbData.orders;
-    if (isSupabaseConfigured()) {
-      try {
-        currentOrders = await getSupabaseOrders();
-      } catch {}
-    }
-
-    const existing = currentOrders.find((o) => o.id === id);
-    if (!existing) {
-      return res.status(404).json({ error: 'Ordem de serviço não encontrada' });
-    }
-
-    const willBeFinished = situacao === 'Concluído' && !existing.saida;
-    const isReopening = (situacao === 'Retornou com defeito' || situacao === 'Em aberto' || situacao === 'Em andamento');
-    const isRetorno = situacao === 'Retornou com defeito';
-    const nowIso = new Date().toISOString();
-
-    const newHistoryEntry = {
-      id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      de: existing.situacao,
-      para: situacao as OrderStatus,
-      data: nowIso,
-      observacao: situacao === 'Concluído' ? 'Serviço concluído' : undefined,
-    };
-
-    const updatedHistory = req.body.historicoStatus || [
-      ...(Array.isArray(existing.historicoStatus) && existing.historicoStatus.length > 0
-        ? existing.historicoStatus
-        : [
-            {
-              id: `init-${existing.id}`,
-              de: 'Criada',
-              para: existing.situacao,
-              data: existing.entrada || existing.createdAt || nowIso,
-              observacao: 'Abertura da O.S.',
-            },
-          ]),
-      newHistoryEntry,
-    ];
-
-    const patchPayload: Partial<ServiceOrder> = {
-      situacao: situacao as OrderStatus,
-      saida: willBeFinished ? nowIso : (isReopening ? undefined : existing.saida),
-      retornoAt: isRetorno
-        ? (req.body.retornoAt || existing.retornoAt || nowIso)
-        : existing.retornoAt,
-      historicoStatus: updatedHistory,
-    };
-
-    let updated = { ...existing, ...patchPayload };
-    if (isSupabaseConfigured()) {
-      updated = await updateSupabaseOrder(id, patchPayload);
-    }
-
-    const localIdx = dbData.orders.findIndex((o) => o.id === id);
-    if (localIdx !== -1) {
-      dbData.orders[localIdx] = updated;
-    }
-    saveData(dbData);
+    const newStatus = req.body.situacao || req.body.newStatus;
+    const updated = await serviceOrderController.changeStatus({
+      orderId: req.params.id,
+      newStatus,
+      observacao: req.body.observacao,
+      usuario: req.body.usuario || req.user?.nomeFantasia || 'Técnico Especialista',
+      customDate: req.body.saida || req.body.dataRetorno || req.body.dataRetirada,
+      motivoRetorno: req.body.motivoRetorno,
+    });
     res.json(updated);
-  } catch (error: any) {
-    console.error('Failed to patch order status:', error);
-    res.status(500).json({ error: error.message || 'Erro ao atualizar status da ordem' });
+  } catch (err) {
+    next(err);
   }
 });
 
-app.patch('/api/orders/:id/prazo', async (req: Request, res: Response) => {
+app.delete('/api/orders/:id', requireAuth, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
-    const { prazo } = req.body;
-    const patchPayload = { prazo: prazo ? String(prazo).trim() : undefined };
-
-    let updated: any = null;
-    if (isSupabaseConfigured()) {
-      updated = await updateSupabaseOrder(id, patchPayload);
+    const success = await serviceOrderController.deleteOrder(req.params.id);
+    if (!success) {
+      return res.status(404).json({ error: 'Ordem de serviço não encontrada para exclusão' });
     }
-    const idx = dbData.orders.findIndex((o) => o.id === id);
-    if (idx !== -1) {
-      dbData.orders[idx].prazo = patchPayload.prazo;
-      if (!updated) updated = dbData.orders[idx];
-    }
-    saveData(dbData);
-    res.json(updated || { id, ...patchPayload });
-  } catch (error: any) {
-    console.error('Failed to patch prazo:', error);
-    res.status(500).json({ error: error.message || 'Erro ao atualizar prazo' });
+    res.json({ success: true, message: 'Ordem de serviço excluída com sucesso' });
+  } catch (err) {
+    next(err);
   }
 });
 
-app.patch('/api/orders/:id/retirada', async (req: Request, res: Response) => {
+// Histórico de Status Oficial (Relacionamento 1:N)
+app.get('/api/orders/:id/history', requireAuth, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
-    const { dataRetirada } = req.body;
-    const patchPayload = { dataRetirada: dataRetirada ? String(dataRetirada).trim() : new Date().toISOString() };
-
-    let updated: any = null;
-    if (isSupabaseConfigured()) {
-      updated = await updateSupabaseOrder(id, patchPayload);
-    }
-    const idx = dbData.orders.findIndex((o) => o.id === id);
-    if (idx !== -1) {
-      dbData.orders[idx].dataRetirada = patchPayload.dataRetirada;
-      if (!updated) updated = dbData.orders[idx];
-    }
-    saveData(dbData);
-    res.json(updated || { id, ...patchPayload });
-  } catch (error: any) {
-    console.error('Failed to patch retirada:', error);
-    res.status(500).json({ error: error.message || 'Erro ao registrar retirada' });
+    const history = await statusHistoryDAO.findByOrderId(req.params.id);
+    res.json(history);
+  } catch (err) {
+    next(err);
   }
 });
 
-app.delete('/api/orders/:id', async (req: Request, res: Response) => {
+// ------------------------------------------------------------------------------
+// LAUDOS TÉCNICOS PERICIAIS (Relacionamento 1:1 Estrito com validação de unicidade)
+// ------------------------------------------------------------------------------
+app.get('/api/orders/:id/technical-report', requireAuth, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
-    if (isSupabaseConfigured()) {
-      await deleteSupabaseOrder(id);
+    const report = await technicalReportController.getReportByOrderId(req.params.id);
+    if (!report) {
+      return res.status(404).json({ error: 'Laudo técnico não encontrado para esta ordem de serviço' });
     }
-    dbData.orders = dbData.orders.filter((o) => o.id !== id);
-    saveData(dbData);
-    res.json({ success: true, message: 'Ordem excluída com sucesso' });
-  } catch (error: any) {
-    console.error('Failed to delete order:', error);
-    res.status(500).json({ error: error.message || 'Erro ao excluir ordem de serviço' });
+    res.json(report);
+  } catch (err) {
+    next(err);
   }
 });
 
-// --- MAINTENANCE EXPENSES ---
-app.get('/api/maintenance-expenses', async (req: Request, res: Response) => {
-  if (isSupabaseConfigured()) {
-    try {
+app.post('/api/orders/:id/technical-report', requireAuth, validateBody(TechnicalReportSchema), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const created = await technicalReportController.createReport({
+      serviceOrderId: req.params.id,
+      ...req.body,
+    });
+    res.status(201).json(created);
+  } catch (err: any) {
+    if (err.message && (err.message.includes('1:1') || err.message.includes('violada') || err.message.includes('já possui'))) {
+      return res.status(409).json({ error: err.message });
+    }
+    next(err);
+  }
+});
+
+app.put('/api/orders/:id/technical-report', requireAuth, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const updated = await technicalReportController.updateReport(req.params.id, req.body);
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.delete('/api/orders/:id/technical-report', requireAuth, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const success = await technicalReportController.deleteReport(req.params.id);
+    res.json({ success, message: 'Laudo técnico removido com sucesso' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ------------------------------------------------------------------------------
+// DESPESAS DE MANUTENÇÃO (Custos e peças)
+// ------------------------------------------------------------------------------
+app.get('/api/maintenance-expenses', requireAuth, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (isSupabaseConfigured()) {
       const expenses = await getSupabaseExpenses();
       return res.json(expenses);
-    } catch (e: any) {
-      console.warn('[Supabase] Failed get expenses, using local:', e.message);
     }
+    res.json(dbData.maintenanceExpenses || []);
+  } catch (err) {
+    next(err);
   }
-  res.json(dbData.maintenanceExpenses || []);
 });
 
-app.post('/api/maintenance-expenses', async (req: Request, res: Response) => {
+app.post('/api/maintenance-expenses', requireAuth, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { mes, descricao, categoria, valor, data } = req.body;
     if (!mes || !descricao || valor === undefined) {
@@ -922,13 +563,12 @@ app.post('/api/maintenance-expenses', async (req: Request, res: Response) => {
     dbData.maintenanceExpenses.unshift(newExpense);
     saveData(dbData);
     res.status(201).json(newExpense);
-  } catch (error: any) {
-    console.error('Failed to create expense:', error);
-    res.status(500).json({ error: error.message || 'Erro ao registrar despesa' });
+  } catch (err) {
+    next(err);
   }
 });
 
-app.delete('/api/maintenance-expenses/:id', async (req: Request, res: Response) => {
+app.delete('/api/maintenance-expenses/:id', requireAuth, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
     if (isSupabaseConfigured()) {
@@ -939,83 +579,13 @@ app.delete('/api/maintenance-expenses/:id', async (req: Request, res: Response) 
       saveData(dbData);
     }
     res.json({ success: true, message: 'Custo de manutenção excluído com sucesso' });
-  } catch (error: any) {
-    console.error('Failed to delete expense:', error);
-    res.status(500).json({ error: error.message || 'Erro ao excluir despesa' });
+  } catch (err) {
+    next(err);
   }
 });
 
-// --- 1:1 TECHNICAL REPORT ROUTES (LAUDOS TÉCNICOS PERICIAIS - MVC) ---
-app.get('/api/orders/:id/technical-report', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const report = await technicalReportController.getReportByOrderId(id);
-    if (!report) {
-      const local = (dbData.technicalReports || []).find((r) => r.serviceOrderId === id);
-      if (local) return res.json(local);
-      return res.status(404).json({ error: 'Laudo técnico não encontrado para esta ordem de serviço' });
-    }
-    res.json(report);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Erro ao consultar laudo técnico' });
-  }
-});
-
-app.post('/api/orders/:id/technical-report', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { diagnostico, servicoRealizado, pecasUtilizadas, observacaoTecnica, tecnicoResponsavel, dataAnalise } = req.body;
-    const created = await technicalReportController.createReport({
-      serviceOrderId: id,
-      diagnostico,
-      servicoRealizado,
-      pecasUtilizadas,
-      observacaoTecnica,
-      tecnicoResponsavel,
-      dataAnalise,
-    });
-
-    if (!dbData.technicalReports) dbData.technicalReports = [];
-    dbData.technicalReports = [created, ...dbData.technicalReports.filter((r) => r.serviceOrderId !== id)];
-    saveData(dbData);
-    res.status(201).json(created);
-  } catch (error: any) {
-    const isConflict = error.message?.includes('1:1') || error.message?.includes('violada');
-    res.status(isConflict ? 409 : 400).json({ error: error.message || 'Erro ao emitir laudo técnico' });
-  }
-});
-
-app.put('/api/orders/:id/technical-report', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const updated = await technicalReportController.updateReport(id, req.body);
-
-    if (!dbData.technicalReports) dbData.technicalReports = [];
-    dbData.technicalReports = dbData.technicalReports.map((r) => (r.serviceOrderId === id ? updated : r));
-    saveData(dbData);
-    res.json(updated);
-  } catch (error: any) {
-    res.status(400).json({ error: error.message || 'Erro ao atualizar laudo técnico' });
-  }
-});
-
-app.delete('/api/orders/:id/technical-report', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    await technicalReportController.deleteReport(id);
-
-    if (dbData.technicalReports) {
-      dbData.technicalReports = dbData.technicalReports.filter((r) => r.serviceOrderId !== id);
-      saveData(dbData);
-    }
-    res.json({ success: true, message: 'Laudo técnico excluído com sucesso' });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Erro ao excluir laudo técnico' });
-  }
-});
-
-// Reset endpoint
-app.post('/api/reset', async (req: Request, res: Response) => {
+// Sincronização / Reset de dados padrão
+app.post('/api/reset', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     dbData = {
       clients: INITIAL_CLIENTS.map((c) => ({ ...c, nome: (c.nome || '').toUpperCase() })),
@@ -1029,14 +599,31 @@ app.post('/api/reset', async (req: Request, res: Response) => {
       await seedSupabaseIfEmpty(dbData.clients, dbData.orders, dbData.maintenanceExpenses, 150002);
     }
 
-    res.json({ success: true, message: 'Dados sincronizados com sucesso' });
+    res.json({ success: true, message: 'Registros restaurados com sucesso' });
   } catch (error: any) {
-    console.error('Failed to reset:', error);
     res.status(500).json({ error: 'Falha ao restaurar dados' });
   }
 });
 
-// Vite middleware & Static Serving
+// ==============================================================================
+// 3. MIDDLEWARE DE TRATAMENTO GLOBAL DE ERROS (Padronização de status HTTP)
+// ==============================================================================
+app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  const status = err.status || err.statusCode || 500;
+  const message = err.message || 'Erro interno no servidor';
+
+  // Não vazar stack trace em produção
+  const response: any = { error: message };
+  if (process.env.NODE_ENV !== 'production' && status === 500) {
+    response.stack = err.stack;
+  }
+
+  res.status(status).json(response);
+});
+
+// ==============================================================================
+// 4. VITE MIDDLEWARES / STATIC SERVING & INICIALIZAÇÃO
+// ==============================================================================
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
@@ -1053,8 +640,13 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[N! GAMES] Server running on http://0.0.0.0:${PORT} (Supabase Ready)`);
+    console.log(`[N! GAMES] Servidor backend ativo em http://0.0.0.0:${PORT}`);
   });
 }
 
-startServer();
+// Inicia servidor apenas quando executado diretamente
+if (process.env.NODE_ENV !== 'test') {
+  startServer();
+}
+
+export { app };

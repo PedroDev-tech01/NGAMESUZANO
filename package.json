@@ -1,7 +1,7 @@
 {
-  "name": "react-example",
+  "name": "ngames-sistema-os",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -13,7 +13,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@google/genai": "^2.4.0",
     "@supabase/server": "^1.7.0",
     "@supabase/supabase-js": "^2.116.0",
     "@tailwindcss/vite": "^4.1.14",

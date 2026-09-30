@@ -1,5 +1,7 @@
+import 'dotenv/config';
 import { getSupabase, isSupabaseConfigured, isAuthOrKeyError, resetSupabaseClientToDefault } from '../lib/supabase';
 import { Client, ServiceOrder, MaintenanceExpense, OrderStatus, SalesChannel, OrderItem } from '../types';
+import bcrypt from 'bcryptjs';
 
 export function isSupabaseConnected(): boolean {
   return isSupabaseConfigured();
@@ -740,10 +742,17 @@ export interface AuthAccount {
   active: boolean;
 }
 
+// Senha administrativa inicial lida estritamente do ambiente
+const initialAdminPassword = process.env.INITIAL_ADMIN_PASSWORD;
+if (!initialAdminPassword) {
+  throw new Error('INITIAL_ADMIN_PASSWORD não configurada.');
+}
+const HASHED_INITIAL_PASS = bcrypt.hashSync(initialAdminPassword, 10);
+
 export const MASTER_AUTH_ACCOUNT: AuthAccount = {
   cnpj: '34.467.363/0001-53',
   cleanCnpj: '34467363000153',
-  senha: 'Loja3637',
+  senha: HASHED_INITIAL_PASS,
   razaoSocial: 'N! GAMES ASSISTÊNCIA TÉCNICA ESPECIALIZADA',
   nomeFantasia: 'N! GAMES',
   role: 'admin',
@@ -766,7 +775,6 @@ export async function ensureAuthAccountInDb(): Promise<void> {
     });
     if (tableErr) {
       // If table doesn't exist, we store in system_settings
-      // console.log('[Supabase] Using system_settings for auth credentials');
     }
 
     // 2. Always persist in system_settings table (which is already configured)
@@ -777,6 +785,21 @@ export async function ensureAuthAccountInDb(): Promise<void> {
     });
   } catch (err) {
     console.warn('[Supabase] Note on ensuring auth account in database:', err);
+  }
+}
+
+export async function updateAuthAccountPassword(cleanCnpj: string, hashedPassword: string): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) return;
+  try {
+    await sb.from('auth_accounts').update({ senha: hashedPassword }).eq('cnpj', MASTER_AUTH_ACCOUNT.cnpj);
+    await sb.from('system_settings').upsert({
+      key: `auth_account_${cleanCnpj}`,
+      value: JSON.stringify({ ...MASTER_AUTH_ACCOUNT, senha: hashedPassword }),
+      updated_at: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.warn('[Supabase] Error upgrading auth account password hash:', e);
   }
 }
 

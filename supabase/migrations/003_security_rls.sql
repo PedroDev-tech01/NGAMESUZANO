@@ -4,6 +4,17 @@
 -- histórico de status e contas de autenticação com controle de acesso granular.
 -- ==============================================================================
 
+-- Garantir que a tabela auth_accounts exista antes de aplicar RLS
+CREATE TABLE IF NOT EXISTS public.auth_accounts (
+  id TEXT PRIMARY KEY,
+  cnpj TEXT NOT NULL UNIQUE,
+  senha TEXT NOT NULL,
+  razao_social TEXT NOT NULL,
+  nome_fantasia TEXT NOT NULL,
+  ativo BOOLEAN NOT NULL DEFAULT true,
+  created_at TEXT NOT NULL DEFAULT (now()::text)
+);
+
 -- 1. Habilitar RLS em todas as tabelas principais
 ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.service_orders ENABLE ROW LEVEL SECURITY;

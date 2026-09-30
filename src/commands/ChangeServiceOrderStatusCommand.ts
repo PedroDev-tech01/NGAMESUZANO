@@ -12,6 +12,7 @@ import { ICommand } from '../interfaces/ICommand';
 import { IServiceOrderDAO } from '../interfaces/IServiceOrderDAO';
 import { IStatusHistoryDAO } from '../interfaces/IStatusHistoryDAO';
 import { ServiceOrder, OrderStatus, StatusHistoryEntry } from '../types';
+import { ServiceOrderBusinessService } from '../services/ServiceOrderBusinessService';
 
 export interface ChangeServiceOrderStatusInput {
   orderId: string;
@@ -34,43 +35,24 @@ export class ChangeServiceOrderStatusCommand implements ICommand<ChangeServiceOr
       throw new Error(`Ordem de serviço #${input.orderId} não encontrada para alteração de status.`);
     }
 
-    const previousStatus = existing.situacao;
-    const nowIso = input.customDate || new Date().toISOString();
+    const { updatedFields, newHistoryEntry } = ServiceOrderBusinessService.applyStatusTransitionRules(
+      existing,
+      input.newStatus,
+      {
+        observacao: input.observacao,
+        usuario: input.usuario,
+        motivoRetorno: input.motivoRetorno,
+        customDate: input.customDate,
+      }
+    );
+
     const patch: Partial<ServiceOrder> = {
-      situacao: input.newStatus,
+      ...updatedFields,
+      historicoStatus: [
+        ...(existing.historicoStatus || []),
+        newHistoryEntry,
+      ],
     };
-
-    // Automação: ao concluir, preenche data de saída se não existir
-    if (input.newStatus === 'Concluído') {
-      if (!existing.saida) {
-        patch.saida = nowIso;
-      }
-    } else if (input.newStatus === 'Retornou com defeito') {
-      patch.dataRetorno = nowIso;
-      patch.retornoAt = nowIso;
-      if (input.motivoRetorno) {
-        patch.motivoRetorno = input.motivoRetorno;
-      }
-    } else if (input.newStatus === 'Em andamento' || input.newStatus === 'Em aberto') {
-      // Se reaberto a partir de concluído
-      if (previousStatus === 'Concluído') {
-        patch.saida = undefined;
-      }
-    }
-
-    const newHistoryEntry: StatusHistoryEntry = {
-      id: `hist-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-      de: previousStatus,
-      para: input.newStatus,
-      data: nowIso,
-      usuario: input.usuario || 'Técnico N! GAMES',
-      observacao: input.observacao || (input.newStatus === 'Concluído' ? 'Serviço concluído com sucesso' : undefined),
-    };
-
-    patch.historicoStatus = [
-      ...(existing.historicoStatus || []),
-      newHistoryEntry,
-    ];
 
     const updated = await this.orderDAO.update(input.orderId, patch);
 
@@ -80,11 +62,11 @@ export class ChangeServiceOrderStatusCommand implements ICommand<ChangeServiceOr
         await this.historyDAO.create({
           id: newHistoryEntry.id,
           serviceOrderId: input.orderId,
-          statusAnterior: previousStatus,
+          statusAnterior: newHistoryEntry.de,
           statusNovo: input.newStatus,
           observacao: newHistoryEntry.observacao,
           usuario: newHistoryEntry.usuario,
-          createdAt: nowIso,
+          createdAt: newHistoryEntry.data,
         });
       } catch (err) {
         console.warn('[ChangeServiceOrderStatusCommand] Aviso ao persistir histórico:', err);

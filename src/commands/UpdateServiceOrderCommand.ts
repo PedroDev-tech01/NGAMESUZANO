@@ -8,7 +8,8 @@ import { ServiceOrder } from '../types';
 
 export interface UpdateServiceOrderInput {
   id: string;
-  data: Partial<ServiceOrder>;
+  data?: Partial<ServiceOrder>;
+  [key: string]: any;
 }
 
 export class UpdateServiceOrderCommand implements ICommand<UpdateServiceOrderInput, ServiceOrder> {
@@ -20,12 +21,16 @@ export class UpdateServiceOrderCommand implements ICommand<UpdateServiceOrderInp
       throw new Error(`Ordem de serviço #${input.id} não encontrada para atualização.`);
     }
 
+    const payload: Partial<ServiceOrder> = input.data ? { ...input.data } : { ...input };
+    delete (payload as any).id;
+    delete (payload as any).data;
+
     // Regra de segurança: se a O.S. estiver Concluída, impede sobrescrita acidental de cliente e equipamento
     if (existing.situacao === 'Concluído') {
-      delete input.data.clienteId;
-      delete input.data.entrada;
+      delete payload.clienteId;
+      delete payload.entrada;
     }
 
-    return await this.orderDAO.update(input.id, input.data);
+    return await this.orderDAO.update(input.id, payload);
   }
 }

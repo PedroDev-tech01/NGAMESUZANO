@@ -2,14 +2,9 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 let supabaseClient: SupabaseClient | null = null;
 
-// Default verified credentials for the N! GAMES project
-export const DEFAULT_SUPABASE_URL = 'https://frjmslrygksatugmjzot.supabase.co';
-export const DEFAULT_SUPABASE_KEY = 'sb_publishable_2_qxvkQic5QCQP__wXxBYQ_r2UMfaTW';
-
-// Known revoked or deprecated keys that should never be used
-const KNOWN_INVALID_KEYS = new Set([
-  'sb_secret_VoBzuy8ijWDIqTLLkmXJNg_VuiBEl4q',
-]);
+// Resolução de credenciais do Supabase a partir de variáveis de ambiente
+export const DEFAULT_SUPABASE_URL = '';
+export const DEFAULT_SUPABASE_KEY = '';
 
 function isValidHttpUrl(str?: string): boolean {
   if (!str) return false;
@@ -54,7 +49,7 @@ function normalizeSupabaseUrl(rawUrl?: string): string {
 
 function isValidSupabaseKey(key?: string): boolean {
   const clean = cleanCandidateString(key);
-  if (!clean || clean.length < 15 || clean.includes(' ') || KNOWN_INVALID_KEYS.has(clean)) {
+  if (!clean || clean.length < 15 || clean.includes(' ')) {
     return false;
   }
   return true;

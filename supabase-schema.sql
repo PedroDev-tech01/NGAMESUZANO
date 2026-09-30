@@ -1,5 +1,5 @@
--- N! GAMES ASSISTÊNCIA TÉCNICA - SCHEMA SUPABASE (PostgreSQL)
--- Copie e cole este script no SQL Editor do seu projeto Supabase (https://supabase.com/dashboard)
+-- N! GAMES ASSISTÊNCIA TÉCNICA - SCHEMA COMPLETO SUPABASE (PostgreSQL)
+-- Execute este script no SQL Editor do seu projeto Supabase (https://supabase.com/dashboard)
 
 -- 1. Tabela de Clientes
 CREATE TABLE IF NOT EXISTS public.clients (
@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS public.clients (
   nascimento TEXT,
   endereco TEXT,
   obs TEXT,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL DEFAULT (now()::text)
 );
 
 -- 2. Tabela de Ordens de Serviço
@@ -41,11 +41,13 @@ CREATE TABLE IF NOT EXISTS public.service_orders (
   pecas NUMERIC(12, 2),
   desconto NUMERIC(12, 2),
   obs TEXT,
-  created_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (now()::text),
   retorno_at TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_service_orders_cliente_id ON public.service_orders(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_service_orders_numero ON public.service_orders(numero);
 
--- 3. Tabela de Laudos Técnicos Especializados (Relacionamento 1:1 estrito com service_orders)
+-- 3. Tabela de Laudos Técnicos Especializados (Relacionamento 1:1 com service_orders)
 CREATE TABLE IF NOT EXISTS public.technical_reports (
   id TEXT PRIMARY KEY,
   service_order_id TEXT NOT NULL UNIQUE REFERENCES public.service_orders(id) ON DELETE CASCADE,
@@ -55,9 +57,10 @@ CREATE TABLE IF NOT EXISTS public.technical_reports (
   observacao_tecnica TEXT,
   tecnico_responsavel TEXT NOT NULL,
   data_analise TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  created_at TEXT NOT NULL DEFAULT (now()::text),
+  updated_at TEXT NOT NULL DEFAULT (now()::text)
 );
+CREATE INDEX IF NOT EXISTS idx_technical_reports_order_id ON public.technical_reports(service_order_id);
 
 -- 4. Tabela de Histórico de Mudança de Status (Relacionamento 1:N com service_orders)
 CREATE TABLE IF NOT EXISTS public.service_order_status_history (
@@ -67,10 +70,11 @@ CREATE TABLE IF NOT EXISTS public.service_order_status_history (
   status_novo TEXT NOT NULL,
   observacao TEXT,
   usuario TEXT,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL DEFAULT (now()::text)
 );
+CREATE INDEX IF NOT EXISTS idx_status_history_order_id ON public.service_order_status_history(service_order_id);
 
--- 5. Tabela de Custos / Despesas de Manutenção
+-- 5. Tabela de Despesas de Manutenção
 CREATE TABLE IF NOT EXISTS public.maintenance_expenses (
   id TEXT PRIMARY KEY,
   mes TEXT NOT NULL,
@@ -78,7 +82,7 @@ CREATE TABLE IF NOT EXISTS public.maintenance_expenses (
   categoria TEXT NOT NULL,
   valor NUMERIC(12, 2) NOT NULL,
   data TEXT NOT NULL,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL DEFAULT (now()::text)
 );
 
 -- 6. Tabela de Configurações do Sistema
@@ -96,65 +100,65 @@ CREATE TABLE IF NOT EXISTS public.auth_accounts (
   razao_social TEXT NOT NULL,
   nome_fantasia TEXT NOT NULL,
   ativo BOOLEAN NOT NULL DEFAULT true,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL DEFAULT (now()::text)
 );
 
--- 8. Tabela de Laudos Técnicos Periciais (Relacionamento 1:1 ESTRITO com service_orders)
-CREATE TABLE IF NOT EXISTS public.technical_reports (
-  id TEXT PRIMARY KEY,
-  service_order_id TEXT NOT NULL UNIQUE REFERENCES public.service_orders(id) ON DELETE CASCADE,
-  diagnostico TEXT NOT NULL,
-  servico_realizado TEXT NOT NULL,
-  pecas_utilizadas TEXT,
-  observacao_tecnica TEXT,
-  tecnico_responsavel TEXT NOT NULL,
-  data_analise TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_technical_reports_order_id ON public.technical_reports(service_order_id);
-
--- 9. Tabela de Histórico Persistente de Transições de Status (Relacionamento 1:N com service_orders)
-CREATE TABLE IF NOT EXISTS public.service_order_status_history (
-  id TEXT PRIMARY KEY,
-  service_order_id TEXT NOT NULL REFERENCES public.service_orders(id) ON DELETE CASCADE,
-  status_anterior TEXT NOT NULL,
-  status_novo TEXT NOT NULL,
-  observacao TEXT,
-  usuario TEXT,
-  created_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_status_history_order_id ON public.service_order_status_history(service_order_id);
-
--- Inserir Conta Oficial Autorizada
+-- Inserir Conta de Acesso Oficial da Loja (senha gerenciada e atualizada via backend/INITIAL_ADMIN_PASSWORD)
 INSERT INTO public.auth_accounts (id, cnpj, senha, razao_social, nome_fantasia, ativo, created_at)
 VALUES (
   'acc-master-ngames',
   '34.467.363/0001-53',
-  'Loja3637',
+  '$2b$10$wE0uGqFpUoQ696nF5yJ9E.lKj7b1W32VpG3E8Ym3W2y1Z0a1B2c3D', -- Hash bcrypt inicial
   'N! GAMES ASSISTÊNCIA TÉCNICA ESPECIALIZADA',
   'N! GAMES',
   true,
-  NOW()
+  NOW()::text
 )
 ON CONFLICT (cnpj) DO UPDATE SET
-  senha = EXCLUDED.senha,
   ativo = EXCLUDED.ativo;
 
--- Habilitar RLS ou permitir leitura/escrita com Service Role / Anon
+-- 8. Habilitar Row Level Security (RLS)
 ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.service_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.technical_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.service_order_status_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.maintenance_expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.auth_accounts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.technical_reports ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.service_order_status_history ENABLE ROW LEVEL SECURITY;
 
--- Políticas de acesso livre para o sistema operacional
-CREATE POLICY "Permitir tudo para autenticados e anon" ON public.clients FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Permitir tudo para autenticados e anon" ON public.service_orders FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Permitir tudo para autenticados e anon" ON public.maintenance_expenses FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Permitir tudo para autenticados e anon" ON public.system_settings FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Permitir tudo para autenticados e anon" ON public.auth_accounts FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Permitir tudo para autenticados e anon" ON public.technical_reports FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Permitir tudo para autenticados e anon" ON public.service_order_status_history FOR ALL USING (true) WITH CHECK (true);
+-- 9. Políticas de Acesso e Proteção de Dados (Hardening RLS)
+-- Limpeza de políticas prévias
+DROP POLICY IF EXISTS "Permitir tudo clients" ON public.clients;
+DROP POLICY IF EXISTS "Permitir tudo service_orders" ON public.service_orders;
+DROP POLICY IF EXISTS "Permitir tudo technical_reports" ON public.technical_reports;
+DROP POLICY IF EXISTS "Permitir tudo service_order_status_history" ON public.service_order_status_history;
+DROP POLICY IF EXISTS "Permitir tudo maintenance_expenses" ON public.maintenance_expenses;
+DROP POLICY IF EXISTS "Permitir tudo system_settings" ON public.system_settings;
+DROP POLICY IF EXISTS "Permitir tudo auth_accounts" ON public.auth_accounts;
+
+-- Auth Accounts: Acesso EXCLUSIVO para service_role (Backend API)
+DROP POLICY IF EXISTS "auth_accounts_service_role_only" ON public.auth_accounts;
+CREATE POLICY "auth_accounts_service_role_only" ON public.auth_accounts
+  FOR ALL
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
+
+-- Tabelas de Domínio: Leitura e escrita via backend autorizado (service_role e authenticated)
+CREATE POLICY "clients_write_authenticated" ON public.clients
+  FOR ALL TO service_role, authenticated USING (true) WITH CHECK (true);
+
+CREATE POLICY "service_orders_write_authenticated" ON public.service_orders
+  FOR ALL TO service_role, authenticated USING (true) WITH CHECK (true);
+
+CREATE POLICY "technical_reports_write_authenticated" ON public.technical_reports
+  FOR ALL TO service_role, authenticated USING (true) WITH CHECK (true);
+
+CREATE POLICY "status_history_write_authenticated" ON public.service_order_status_history
+  FOR ALL TO service_role, authenticated USING (true) WITH CHECK (true);
+
+CREATE POLICY "maintenance_expenses_write_authenticated" ON public.maintenance_expenses
+  FOR ALL TO service_role, authenticated USING (true) WITH CHECK (true);
+
+CREATE POLICY "system_settings_write_authenticated" ON public.system_settings
+  FOR ALL TO service_role, authenticated USING (true) WITH CHECK (true);

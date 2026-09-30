@@ -51,7 +51,13 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
     try {
       const stored = localStorage.getItem('ngames_auth_user');
-      if (stored) return JSON.parse(stored);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.token) {
+          api.setAuthToken(parsed.token);
+        }
+        return parsed;
+      }
     } catch {
       // ignore
     }
@@ -60,6 +66,9 @@ export default function App() {
 
   const handleLoginSuccess = useCallback((user: AuthUser) => {
     setCurrentUser(user);
+    if (user?.token) {
+      api.setAuthToken(user.token);
+    }
     try {
       localStorage.setItem('ngames_auth_user', JSON.stringify(user));
     } catch {
@@ -69,6 +78,7 @@ export default function App() {
 
   const handleLogout = useCallback(() => {
     setCurrentUser(null);
+    api.setAuthToken('');
     try {
       localStorage.removeItem('ngames_auth_user');
     } catch {

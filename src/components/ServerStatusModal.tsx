@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS public.clients (
   nascimento TEXT,
   endereco TEXT,
   obs TEXT,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL DEFAULT (now()::text)
 );
 
 CREATE TABLE IF NOT EXISTS public.service_orders (
@@ -43,8 +43,31 @@ CREATE TABLE IF NOT EXISTS public.service_orders (
   pecas NUMERIC(12, 2),
   desconto NUMERIC(12, 2),
   obs TEXT,
-  created_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (now()::text),
   retorno_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS public.technical_reports (
+  id TEXT PRIMARY KEY,
+  service_order_id TEXT NOT NULL UNIQUE REFERENCES public.service_orders(id) ON DELETE CASCADE,
+  diagnostico TEXT NOT NULL,
+  servico_realizado TEXT NOT NULL,
+  pecas_utilizadas TEXT,
+  observacao_tecnica TEXT,
+  tecnico_responsavel TEXT NOT NULL,
+  data_analise TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (now()::text),
+  updated_at TEXT NOT NULL DEFAULT (now()::text)
+);
+
+CREATE TABLE IF NOT EXISTS public.service_order_status_history (
+  id TEXT PRIMARY KEY,
+  service_order_id TEXT NOT NULL REFERENCES public.service_orders(id) ON DELETE CASCADE,
+  status_anterior TEXT NOT NULL,
+  status_novo TEXT NOT NULL,
+  observacao TEXT,
+  usuario TEXT,
+  created_at TEXT NOT NULL DEFAULT (now()::text)
 );
 
 CREATE TABLE IF NOT EXISTS public.maintenance_expenses (
@@ -54,7 +77,7 @@ CREATE TABLE IF NOT EXISTS public.maintenance_expenses (
   categoria TEXT NOT NULL,
   valor NUMERIC(12, 2) NOT NULL,
   data TEXT NOT NULL,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL DEFAULT (now()::text)
 );
 
 CREATE TABLE IF NOT EXISTS public.system_settings (
@@ -63,15 +86,58 @@ CREATE TABLE IF NOT EXISTS public.system_settings (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
+CREATE TABLE IF NOT EXISTS public.auth_accounts (
+  id TEXT PRIMARY KEY,
+  cnpj TEXT NOT NULL UNIQUE,
+  senha TEXT NOT NULL,
+  razao_social TEXT NOT NULL,
+  nome_fantasia TEXT NOT NULL,
+  ativo BOOLEAN NOT NULL DEFAULT true,
+  created_at TEXT NOT NULL DEFAULT (now()::text)
+);
+
+INSERT INTO public.auth_accounts (id, cnpj, senha, razao_social, nome_fantasia, ativo, created_at)
+VALUES (
+  'acc-master-ngames',
+  '34.467.363/0001-53',
+  'Loja3637',
+  'N! GAMES ASSISTÊNCIA TÉCNICA ESPECIALIZADA',
+  'N! GAMES',
+  true,
+  NOW()::text
+)
+ON CONFLICT (cnpj) DO UPDATE SET
+  senha = EXCLUDED.senha,
+  ativo = EXCLUDED.ativo;
+
 ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.service_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.technical_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.service_order_status_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.maintenance_expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.auth_accounts ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Permitir tudo clients" ON public.clients;
 CREATE POLICY "Permitir tudo clients" ON public.clients FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Permitir tudo service_orders" ON public.service_orders;
 CREATE POLICY "Permitir tudo service_orders" ON public.service_orders FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Permitir tudo technical_reports" ON public.technical_reports;
+CREATE POLICY "Permitir tudo technical_reports" ON public.technical_reports FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Permitir tudo service_order_status_history" ON public.service_order_status_history;
+CREATE POLICY "Permitir tudo service_order_status_history" ON public.service_order_status_history FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Permitir tudo maintenance_expenses" ON public.maintenance_expenses;
 CREATE POLICY "Permitir tudo maintenance_expenses" ON public.maintenance_expenses FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Permitir tudo system_settings" ON public.system_settings;
 CREATE POLICY "Permitir tudo system_settings" ON public.system_settings FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Permitir tudo auth_accounts" ON public.auth_accounts;
+CREATE POLICY "Permitir tudo auth_accounts" ON public.auth_accounts FOR ALL USING (true) WITH CHECK (true);
 `;
 
 interface ServerStatusModalProps {

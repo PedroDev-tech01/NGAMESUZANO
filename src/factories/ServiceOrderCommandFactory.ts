@@ -1,36 +1,9 @@
 /**
  * Factory para criação desacoplada dos comandos de Ordens de Serviço.
- * Fornece injeção de dependências para DAOs de persistência, histórico e laudos.
+ * Utiliza o padrão Registry / Command Creators para desacoplar a fábrica
+ * de implementações concretas e cumprir o Princípio Aberto/Fechado (OCP).
  */
 import { ICommand } from '../interfaces/ICommand';
-import { IServiceOrderDAO } from '../interfaces/IServiceOrderDAO';
-import { IStatusHistoryDAO } from '../interfaces/IStatusHistoryDAO';
-import { ITechnicalReportDAO } from '../interfaces/ITechnicalReportDAO';
-import {
-  CreateServiceOrderCommand,
-  CreateServiceOrderInput,
-} from '../commands/CreateServiceOrderCommand';
-import {
-  UpdateServiceOrderCommand,
-  UpdateServiceOrderInput,
-} from '../commands/UpdateServiceOrderCommand';
-import {
-  DeleteServiceOrderCommand,
-  DeleteServiceOrderInput,
-} from '../commands/DeleteServiceOrderCommand';
-import {
-  GetServiceOrderByIdCommand,
-  GetServiceOrderByIdInput,
-} from '../commands/GetServiceOrderByIdCommand';
-import {
-  ListServiceOrdersCommand,
-  ListServiceOrdersInput,
-} from '../commands/ListServiceOrdersCommand';
-import {
-  ChangeServiceOrderStatusCommand,
-  ChangeServiceOrderStatusInput,
-} from '../commands/ChangeServiceOrderStatusCommand';
-import { ServiceOrder } from '../types';
 
 export type ServiceOrderCommandType =
   | 'CREATE'
@@ -38,64 +11,59 @@ export type ServiceOrderCommandType =
   | 'DELETE'
   | 'GET_BY_ID'
   | 'LIST'
-  | 'CHANGE_STATUS';
+  | 'CHANGE_STATUS'
+  | (string & {});
 
-export interface CommandMap {
-  CREATE: ICommand<CreateServiceOrderInput, ServiceOrder>;
-  UPDATE: ICommand<UpdateServiceOrderInput, ServiceOrder>;
-  DELETE: ICommand<DeleteServiceOrderInput, boolean>;
-  GET_BY_ID: ICommand<GetServiceOrderByIdInput, ServiceOrder | null>;
-  LIST: ICommand<ListServiceOrdersInput | undefined, ServiceOrder[]>;
-  CHANGE_STATUS: ICommand<ChangeServiceOrderStatusInput, ServiceOrder>;
-}
+export type CommandCreator<TInput = any, TOutput = any> = () => ICommand<TInput, TOutput>;
 
 export class ServiceOrderCommandFactory {
-  constructor(
-    private orderDAO: IServiceOrderDAO,
-    private historyDAO?: IStatusHistoryDAO,
-    private reportDAO?: ITechnicalReportDAO
-  ) {}
+  private readonly creators = new Map<string, CommandCreator>();
 
-  /**
-   * Cria o Command correspondente de acordo com o tipo solicitado.
-   * Evita switches complexos e estruturas acopladas em Controllers.
-   */
-  public createCommand<K extends ServiceOrderCommandType>(type: K): CommandMap[K] {
-    switch (type) {
-      case 'CREATE':
-        return new CreateServiceOrderCommand(
-          this.orderDAO,
-          this.historyDAO
-        ) as unknown as CommandMap[K];
-
-      case 'UPDATE':
-        return new UpdateServiceOrderCommand(this.orderDAO) as unknown as CommandMap[K];
-
-      case 'DELETE':
-        return new DeleteServiceOrderCommand(
-          this.orderDAO,
-          this.reportDAO,
-          this.historyDAO
-        ) as unknown as CommandMap[K];
-
-      case 'GET_BY_ID':
-        return new GetServiceOrderByIdCommand(
-          this.orderDAO,
-          this.reportDAO,
-          this.historyDAO
-        ) as unknown as CommandMap[K];
-
-      case 'LIST':
-        return new ListServiceOrdersCommand(this.orderDAO) as unknown as CommandMap[K];
-
-      case 'CHANGE_STATUS':
-        return new ChangeServiceOrderStatusCommand(
-          this.orderDAO,
-          this.historyDAO
-        ) as unknown as CommandMap[K];
-
-      default:
-        throw new Error(`Tipo de comando não suportado: ${type}`);
+  constructor(initialCreators?: Record<string, CommandCreator>) {
+    if (initialCreators) {
+      for (const [type, creator] of Object.entries(initialCreators)) {
+        this.register(type, creator);
+      }
     }
   }
+
+  /**
+   * Registra um criador de comando no Registry (Aberto para extensão - OCP).
+   */
+  public register<TInput = any, TOutput = any>(
+    type: ServiceOrderCommandType | string,
+    creator: CommandCreator<TInput, TOutput>
+  ): void {
+    this.creators.set(type, creator as CommandCreator);
+  }
+
+  /**
+   * Resolve e instancia o comando registrado a partir dos creators registrados.
+   */
+  public createCommand<TInput = any, TOutput = any>(
+    type: ServiceOrderCommandType | string
+  ): ICommand<TInput, TOutput> {
+    const creator = this.creators.get(type);
+
+    if (!creator) {
+      throw new Error(`Tipo de comando não suportado ou não registrado: ${type}`);
+    }
+
+    return creator() as ICommand<TInput, TOutput>;
+  }
+
+  /**
+   * Verifica se determinado tipo de comando está registrado na fábrica.
+   */
+  public hasCommand(type: ServiceOrderCommandType | string): boolean {
+    return this.creators.has(type);
+  }
+
+  /**
+   * Retorna os identificadores de todos os comandos registrados.
+   */
+  public getRegisteredTypes(): string[] {
+    return Array.from(this.creators.keys());
+  }
 }
+

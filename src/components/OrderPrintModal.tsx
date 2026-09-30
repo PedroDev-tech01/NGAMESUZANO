@@ -293,11 +293,11 @@ export const OrderPrintModal: React.FC<OrderPrintModalProps> = ({
             <button
               type="button"
               onClick={() => setShowLaudoModal(true)}
-              className="px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer bg-[#14171C] text-amber-300 hover:text-amber-200 border border-amber-500/40 hover:bg-amber-950/30"
-              title="Laudo Técnico Pericial Especializado (Relacionamento 1:1 Estrito)"
+              className="px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer bg-[#14171C] text-[#9CA3AF] hover:text-white border border-[#22262E] hover:bg-white/5"
+              title="Laudo Técnico"
             >
-              <FileCheck2 className="w-3.5 h-3.5 text-amber-400" />
-              <span>Laudo Técnico (1:1)</span>
+              <FileCheck2 className="w-3.5 h-3.5" />
+              <span>Laudo Técnico</span>
             </button>
           </div>
 
