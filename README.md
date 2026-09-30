@@ -45,7 +45,7 @@ O sistema adota o padrão **Model-View-Controller (MVC)** em camadas bem delimit
 Aplicação rigorosa dos quatro pilares da Orientação a Objetos:
 - **Abstração**: Contratos definidos por interfaces (`ICommand`, `IServiceOrderDAO`, `IClientDAO`, `ITechnicalReportDAO`, `IStatusHistoryDAO`).
 - **Encapsulamento**: Atributos privados e métodos de mutação controlada nas entidades e no Builder.
-- **Herança e Polimorfismo**: Comandos intercambiáveis que implementam a mesma interface `ICommand<TInput, TOutput>`.
+- **Polimorfismo por Interface**: diferentes Commands implementam o mesmo contrato ICommand e podem ser tratados pela Factory através da mesma abstração.
 
 ## Design Patterns
 

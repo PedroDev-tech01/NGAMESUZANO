@@ -213,18 +213,19 @@ app.post('/api/auth/login', validateBody(LoginSchema), async (req: Request, res:
     });
   }
 
-  // Validação segura com bcrypt (com migração retroativa transparente se estiver em texto puro)
-  let isPasswordValid = false;
-  if (account.senha.startsWith('$2a$') || account.senha.startsWith('$2b$')) {
-    isPasswordValid = await bcrypt.compare(senha, account.senha);
-  } else {
-    isPasswordValid = account.senha === senha;
-    if (isPasswordValid) {
-      // Migração automática de senha em texto puro para hash bcrypt seguro
-      const upgradedHash = await bcrypt.hash(senha, 10);
-      await updateAuthAccountPassword(cleanCnpj, upgradedHash);
-    }
+  // Validação estrita de credenciais com bcrypt (apenas hashes válidos)
+  const isBcryptHash =
+    account.senha.startsWith('$2a$') ||
+    account.senha.startsWith('$2b$') ||
+    account.senha.startsWith('$2y$');
+
+  if (!isBcryptHash) {
+    return res.status(500).json({
+      error: 'Credencial armazenada em formato inválido.',
+    });
   }
+
+  const isPasswordValid = await bcrypt.compare(senha, account.senha);
 
   if (!isPasswordValid) {
     return res.status(401).json({ error: 'Senha incorreta para esta conta.' });
@@ -584,8 +585,13 @@ app.delete('/api/maintenance-expenses/:id', requireAuth, async (req: AuthRequest
   }
 });
 
-// Sincronização / Reset de dados padrão
+// Sincronização / Reset de dados padrão (Exclusivo Administradores)
 app.post('/api/reset', requireAuth, async (req: AuthRequest, res: Response) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({
+      error: 'Acesso restrito a administradores.',
+    });
+  }
   try {
     dbData = {
       clients: INITIAL_CLIENTS.map((c) => ({ ...c, nome: (c.nome || '').toUpperCase() })),

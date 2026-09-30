@@ -763,26 +763,46 @@ export async function ensureAuthAccountInDb(): Promise<void> {
   const sb = getSupabase();
   if (!sb) return;
   try {
-    // 1. Try to upsert in auth_accounts table if it exists
-    const { error: tableErr } = await sb.from('auth_accounts').upsert({
+    // 1. Verificar se a conta já existe na tabela auth_accounts
+    const { data: existing, error: checkErr } = await sb
+      .from('auth_accounts')
+      .select('id, cnpj, senha')
+      .or(`cnpj.eq.${MASTER_AUTH_ACCOUNT.cleanCnpj},cnpj.eq.${MASTER_AUTH_ACCOUNT.cnpj}`)
+      .maybeSingle();
+
+    if (checkErr) {
+      console.warn('[Supabase] Warning checking auth_accounts:', checkErr.message);
+      return;
+    }
+
+    // Se já existe, NÃO sobrescrever a senha existente (mantém senha já armazenada)
+    if (existing) {
+      return;
+    }
+
+    // Se não existir, gerar hash bcrypt da INITIAL_ADMIN_PASSWORD e inserir para bootstrap
+    const initialPassword = process.env.INITIAL_ADMIN_PASSWORD;
+    if (!initialPassword) {
+      throw new Error('INITIAL_ADMIN_PASSWORD não configurada.');
+    }
+    const bootstrapHash = await bcrypt.hash(initialPassword, 10);
+
+    const { error: insertErr } = await sb.from('auth_accounts').insert({
       id: 'acc-master-ngames',
       cnpj: MASTER_AUTH_ACCOUNT.cnpj,
-      senha: MASTER_AUTH_ACCOUNT.senha,
+      senha: bootstrapHash,
       razao_social: MASTER_AUTH_ACCOUNT.razaoSocial,
       nome_fantasia: MASTER_AUTH_ACCOUNT.nomeFantasia,
+      role: 'admin',
       ativo: true,
       created_at: new Date().toISOString(),
     });
-    if (tableErr) {
-      // If table doesn't exist, we store in system_settings
-    }
 
-    // 2. Always persist in system_settings table (which is already configured)
-    await sb.from('system_settings').upsert({
-      key: `auth_account_${MASTER_AUTH_ACCOUNT.cleanCnpj}`,
-      value: JSON.stringify(MASTER_AUTH_ACCOUNT),
-      updated_at: new Date().toISOString(),
-    });
+    if (insertErr) {
+      console.warn('[Supabase] Error inserting initial bootstrap admin into auth_accounts:', insertErr.message);
+    } else {
+      console.log('[Supabase] Initial bootstrap admin account created in auth_accounts.');
+    }
   } catch (err) {
     console.warn('[Supabase] Note on ensuring auth account in database:', err);
   }
@@ -792,12 +812,11 @@ export async function updateAuthAccountPassword(cleanCnpj: string, hashedPasswor
   const sb = getSupabase();
   if (!sb) return;
   try {
-    await sb.from('auth_accounts').update({ senha: hashedPassword }).eq('cnpj', MASTER_AUTH_ACCOUNT.cnpj);
-    await sb.from('system_settings').upsert({
-      key: `auth_account_${cleanCnpj}`,
-      value: JSON.stringify({ ...MASTER_AUTH_ACCOUNT, senha: hashedPassword }),
-      updated_at: new Date().toISOString(),
-    });
+    // Atualiza exclusivamente a tabela auth_accounts sem duplicar dados em system_settings
+    await sb
+      .from('auth_accounts')
+      .update({ senha: hashedPassword })
+      .or(`cnpj.eq.${cleanCnpj},cnpj.eq.${MASTER_AUTH_ACCOUNT.cnpj}`);
   } catch (e) {
     console.warn('[Supabase] Error upgrading auth account password hash:', e);
   }
@@ -807,45 +826,42 @@ export async function findAuthAccount(cleanCnpj: string): Promise<AuthAccount | 
   const sb = getSupabase();
   if (sb) {
     try {
-      // 1. Check auth_accounts table if created
-      const { data: tableData, error: tableErr } = await sb
+      // Busca exclusivamente na tabela auth_accounts
+      const { data, error } = await sb
         .from('auth_accounts')
         .select('*')
-        .eq('cnpj', MASTER_AUTH_ACCOUNT.cnpj)
-        .single();
-      if (!tableErr && tableData) {
-        const rawCnpj = (tableData.cnpj || '').replace(/\D/g, '');
+        .or(`cnpj.eq.${cleanCnpj},cnpj.eq.${MASTER_AUTH_ACCOUNT.cnpj}`)
+        .maybeSingle();
+
+      if (error) {
+        console.warn('[Supabase] Error reading auth account from auth_accounts:', error.message);
+        return null;
+      }
+
+      if (data) {
+        const rawCnpj = (data.cnpj || '').replace(/\D/g, '');
         if (rawCnpj === cleanCnpj) {
           return {
-            cnpj: tableData.cnpj,
+            cnpj: data.cnpj,
             cleanCnpj: rawCnpj,
-            senha: tableData.senha,
-            razaoSocial: tableData.razao_social || 'N! GAMES',
-            nomeFantasia: tableData.nome_fantasia || 'N! GAMES',
-            role: 'admin',
-            active: tableData.ativo ?? true,
+            senha: data.senha,
+            razaoSocial: data.razao_social || 'N! GAMES',
+            nomeFantasia: data.nome_fantasia || 'N! GAMES',
+            role: data.role || 'admin',
+            active: data.ativo ?? true,
           };
         }
       }
 
-      // 2. Check system_settings table in Supabase
-      const { data, error } = await sb
-        .from('system_settings')
-        .select('value')
-        .eq('key', `auth_account_${cleanCnpj}`)
-        .single();
-      if (!error && data?.value) {
-        const parsed = JSON.parse(data.value);
-        if (parsed && typeof parsed === 'object') {
-          return parsed as AuthAccount;
-        }
-      }
+      // Supabase está configurado: auth_accounts é a fonte oficial (nunca fallback quando configurado)
+      return null;
     } catch (err) {
-      console.warn('[Supabase] Error reading auth account from Supabase:', err);
+      console.warn('[Supabase] Error reading auth account from auth_accounts:', err);
+      return null;
     }
   }
 
-  // 3. Fallback check for the required account
+  // Fallback em memória exclusivo para quando Supabase NÃO estiver configurado (desenvolvimento offline/testes)
   if (cleanCnpj === MASTER_AUTH_ACCOUNT.cleanCnpj) {
     return MASTER_AUTH_ACCOUNT;
   }

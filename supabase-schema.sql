@@ -103,19 +103,9 @@ CREATE TABLE IF NOT EXISTS public.auth_accounts (
   created_at TEXT NOT NULL DEFAULT (now()::text)
 );
 
--- Inserir Conta de Acesso Oficial da Loja (senha gerenciada e atualizada via backend/INITIAL_ADMIN_PASSWORD)
-INSERT INTO public.auth_accounts (id, cnpj, senha, razao_social, nome_fantasia, ativo, created_at)
-VALUES (
-  'acc-master-ngames',
-  '34.467.363/0001-53',
-  '$2b$10$wE0uGqFpUoQ696nF5yJ9E.lKj7b1W32VpG3E8Ym3W2y1Z0a1B2c3D', -- Hash bcrypt inicial
-  'N! GAMES ASSISTÊNCIA TÉCNICA ESPECIALIZADA',
-  'N! GAMES',
-  true,
-  NOW()::text
-)
-ON CONFLICT (cnpj) DO UPDATE SET
-  ativo = EXCLUDED.ativo;
+-- NOTA DE SEGURANÇA: A conta administrativa é provisionada dinamicamente pelo backend
+-- através de ensureAuthAccountInDb() com hash derivado de INITIAL_ADMIN_PASSWORD.
+-- Nenhum hash estático ou credencial fixa deve ser inserido via SQL.
 
 -- 8. Habilitar Row Level Security (RLS)
 ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;

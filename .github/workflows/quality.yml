@@ -1,0 +1,38 @@
+name: Quality & CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality:
+    name: Typecheck, Test & Build
+    runs-on: ubuntu-latest
+
+    env:
+      JWT_SECRET: ci-test-jwt-secret-not-production
+      INITIAL_ADMIN_PASSWORD: ci-test-admin-password
+      NODE_ENV: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run Typecheck
+        run: npm run typecheck
+
+      - name: Run Tests
+        run: npm test
+
+      - name: Run Production Build
+        run: npm run build

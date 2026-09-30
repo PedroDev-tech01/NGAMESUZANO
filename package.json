@@ -22,8 +22,6 @@
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
     "express": "^4.21.2",
-    "firebase": "^12.19.0",
-    "firebase-admin": "^14.4.0",
     "html2canvas-pro": "^2.4.4",
     "html2pdf.js": "^0.14.0",
     "jsonwebtoken": "^9.0.3",
@@ -34,7 +32,6 @@
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "recharts": "^3.10.1",
-    "vite": "^6.2.3",
     "zod": "^4.6.5"
   },
   "devDependencies": {
