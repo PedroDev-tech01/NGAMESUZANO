@@ -17,7 +17,7 @@ export interface BootstrapResponse {
   serverTime: string;
 }
 
-const API_BASE = '/api';
+const API_BASE = '/.netlify/functions/api';
 
 const STORAGE_AUTH_USER = 'ngames_auth_user';
 const STORAGE_AUTH_TOKEN = 'ngames_auth_token';
