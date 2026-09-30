@@ -1,9 +1,32 @@
-# Configuração de Deploy no Netlify
 [build]
-  command = "npm run build"
+  command = "npm run build:client"
   publish = "dist"
+  functions = "netlify/functions"
 
-# Redirecionamento SPA para React Router / Vite
+[functions]
+  node_bundler = "esbuild"
+
+# A API Express roda em uma única Netlify Function.
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = true
+
+# PDFs autenticados também são gerados pelo backend Express.
+[[redirects]]
+  from = "/os/*"
+  to = "/.netlify/functions/api/os/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/ordem/*"
+  to = "/.netlify/functions/api/ordem/:splat"
+  status = 200
+  force = true
+
+# SPA React: esta regra precisa permanecer por último.
 [[redirects]]
   from = "/*"
   to = "/index.html"

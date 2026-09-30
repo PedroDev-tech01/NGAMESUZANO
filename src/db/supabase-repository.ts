@@ -742,12 +742,13 @@ export interface AuthAccount {
   active: boolean;
 }
 
-// Senha administrativa inicial lida estritamente do ambiente
-const initialAdminPassword = process.env.INITIAL_ADMIN_PASSWORD;
-if (!initialAdminPassword) {
-  throw new Error('INITIAL_ADMIN_PASSWORD não configurada.');
-}
-const HASHED_INITIAL_PASS = bcrypt.hashSync(initialAdminPassword, 10);
+// A senha administrativa existe somente no ambiente do servidor.
+// Não interrompemos o carregamento da API se a variável estiver ausente;
+// a rota de login retorna uma mensagem de configuração sem expor segredos.
+const initialAdminPassword = process.env.INITIAL_ADMIN_PASSWORD || '';
+const HASHED_INITIAL_PASS = initialAdminPassword
+  ? bcrypt.hashSync(initialAdminPassword, 10)
+  : '';
 
 export const MASTER_AUTH_ACCOUNT: AuthAccount = {
   cnpj: '34.467.363/0001-53',
@@ -823,45 +824,8 @@ export async function updateAuthAccountPassword(cleanCnpj: string, hashedPasswor
 }
 
 export async function findAuthAccount(cleanCnpj: string): Promise<AuthAccount | null> {
-  const sb = getSupabase();
-  if (sb) {
-    try {
-      // Busca exclusivamente na tabela auth_accounts
-      const { data, error } = await sb
-        .from('auth_accounts')
-        .select('*')
-        .or(`cnpj.eq.${cleanCnpj},cnpj.eq.${MASTER_AUTH_ACCOUNT.cnpj}`)
-        .maybeSingle();
-
-      if (error) {
-        console.warn('[Supabase] Error reading auth account from auth_accounts:', error.message);
-        return null;
-      }
-
-      if (data) {
-        const rawCnpj = (data.cnpj || '').replace(/\D/g, '');
-        if (rawCnpj === cleanCnpj) {
-          return {
-            cnpj: data.cnpj,
-            cleanCnpj: rawCnpj,
-            senha: data.senha,
-            razaoSocial: data.razao_social || 'N! GAMES',
-            nomeFantasia: data.nome_fantasia || 'N! GAMES',
-            role: data.role || 'admin',
-            active: data.ativo ?? true,
-          };
-        }
-      }
-
-      // Supabase está configurado: auth_accounts é a fonte oficial (nunca fallback quando configurado)
-      return null;
-    } catch (err) {
-      console.warn('[Supabase] Error reading auth account from auth_accounts:', err);
-      return null;
-    }
-  }
-
-  // Fallback em memória exclusivo para quando Supabase NÃO estiver configurado (desenvolvimento offline/testes)
+  // O sistema possui uma única conta administrativa. O login não depende
+  // da disponibilidade da tabela auth_accounts no Supabase.
   if (cleanCnpj === MASTER_AUTH_ACCOUNT.cleanCnpj) {
     return MASTER_AUTH_ACCOUNT;
   }

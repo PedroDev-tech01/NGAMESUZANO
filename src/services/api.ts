@@ -17,7 +17,7 @@ export interface BootstrapResponse {
   serverTime: string;
 }
 
-const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
+const API_BASE = '/api';
 
 const STORAGE_AUTH_USER = 'ngames_auth_user';
 const STORAGE_AUTH_TOKEN = 'ngames_auth_token';
@@ -79,7 +79,7 @@ async function fetchJsonOrThrow<T>(url: string, init?: RequestInit): Promise<T> 
   if (!res.ok) {
     let errorMsg = data?.error || (data?.details ? JSON.stringify(data.details) : `Erro HTTP ${res.status}`);
     if (res.status === 404 && !data?.error) {
-      errorMsg = 'Servidor da API não encontrado (HTTP 404). Verifique se o backend está ativo e se a variável VITE_API_URL está configurada.';
+      errorMsg = 'Servidor da API não encontrado (HTTP 404). Verifique se o deploy da Netlify Function foi concluído.';
     }
     const error = new Error(errorMsg) as any;
     error.status = res.status;

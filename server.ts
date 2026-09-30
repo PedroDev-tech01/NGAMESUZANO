@@ -2,7 +2,6 @@ import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
-import { createServer as createViteServer } from 'vite';
 import bcrypt from 'bcryptjs';
 
 import { INITIAL_CLIENTS, INITIAL_ORDERS } from './src/data/initialData';
@@ -43,15 +42,19 @@ import {
   insertSupabaseExpense,
   deleteSupabaseExpense,
   seedSupabaseIfEmpty,
-  ensureAuthAccountInDb,
   findAuthAccount,
-  updateAuthAccountPassword,
   setSupabaseCaches,
 } from './src/db/supabase-repository';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
-const DB_FILE = path.join(process.cwd(), 'data', 'db.json');
+const IS_SERVERLESS =
+  process.env.NETLIFY_FUNCTION === 'true' ||
+  process.env.NETLIFY === 'true' ||
+  Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
+const DB_FILE = IS_SERVERLESS
+  ? path.join('/tmp', 'ngames-db.json')
+  : path.join(process.cwd(), 'data', 'db.json');
 
 // Interface for local database mirror
 interface LocalDatabase {
@@ -133,12 +136,10 @@ const serviceOrderController = new ServiceOrderController(serviceOrderCommandFac
 const clientController = new ClientController(clientDAO);
 const technicalReportController = new TechnicalReportController(technicalReportDAO);
 
-// Inicializar banco / seeding se configurado
+// Inicializar dados no Supabase, quando configurado.
+// A autenticação administrativa é independente da tabela auth_accounts.
 if (isSupabaseConfigured()) {
-  console.log('[Supabase] Configurado. Inicializando contas e sincronização...');
-  ensureAuthAccountInDb().catch((err) => {
-    console.warn('[Supabase] Aviso ao verificar conta de autenticação:', err);
-  });
+  console.log('[Supabase] Configurado. Inicializando sincronização...');
   seedSupabaseIfEmpty(dbData.clients, dbData.orders, dbData.maintenanceExpenses, dbData.nextOrderSeq).catch((err) => {
     console.warn('[Supabase] Aviso ao verificar dados iniciais:', err);
   });
@@ -170,6 +171,28 @@ app.use((req, res, next) => {
   next();
 });
 
+// Normaliza o caminho recebido pela Netlify Function. Dependendo do rewrite,
+// o serverless-http pode receber /auth/login, /api/auth/login ou o prefixo
+// /.netlify/functions/api. As rotas internas do Express continuam em /api.
+app.use((req, _res, next) => {
+  if (!IS_SERVERLESS) return next();
+
+  const functionPrefix = '/.netlify/functions/api';
+  if (req.url.startsWith(functionPrefix)) {
+    req.url = req.url.slice(functionPrefix.length) || '/';
+  }
+
+  if (
+    !req.url.startsWith('/api') &&
+    !req.url.startsWith('/os/') &&
+    !req.url.startsWith('/ordem/')
+  ) {
+    req.url = `/api${req.url.startsWith('/') ? '' : '/'}${req.url}`;
+  }
+
+  next();
+});
+
 // Request logging for API routes
 app.use('/api', (req, res, next) => {
   const start = Date.now();
@@ -198,6 +221,12 @@ app.get('/api/health', async (req: Request, res: Response) => {
 
 // Autenticação Segura com Bcrypt e JWT
 app.post('/api/auth/login', validateBody(LoginSchema), async (req: Request, res: Response) => {
+  if (!process.env.INITIAL_ADMIN_PASSWORD || !process.env.JWT_SECRET) {
+    return res.status(500).json({
+      error: 'Configuração de autenticação ausente no servidor. Verifique INITIAL_ADMIN_PASSWORD e JWT_SECRET.',
+    });
+  }
+
   const { cnpj, senha } = req.body;
   const cleanCnpj = onlyDigits(cnpj);
 
@@ -632,6 +661,7 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 // ==============================================================================
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -650,8 +680,8 @@ async function startServer() {
   });
 }
 
-// Inicia servidor apenas quando executado diretamente
-if (process.env.NODE_ENV !== 'test') {
+// Em Netlify Functions o Express é invocado pelo handler serverless e não abre porta.
+if (process.env.NODE_ENV !== 'test' && !IS_SERVERLESS) {
   startServer();
 }
 

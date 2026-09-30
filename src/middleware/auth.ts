@@ -2,12 +2,14 @@ import 'dotenv/config';
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET não configurado.');
-}
+export const JWT_SECRET = process.env.JWT_SECRET || '';
 
-export { JWT_SECRET };
+function getJwtSecret(): string {
+  if (!JWT_SECRET) {
+    throw new Error('JWT_SECRET não configurado.');
+  }
+  return JWT_SECRET;
+}
 export const JWT_EXPIRES_IN = '8h';
 
 export interface TokenPayload {
@@ -24,11 +26,11 @@ export interface AuthRequest extends Request {
 }
 
 export function signToken(payload: Omit<TokenPayload, 'iat' | 'exp'>): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: JWT_EXPIRES_IN });
 }
 
 export function verifyToken(token: string): TokenPayload {
-  return jwt.verify(token, JWT_SECRET) as TokenPayload;
+  return jwt.verify(token, getJwtSecret()) as TokenPayload;
 }
 
 export const requireAuth = (
