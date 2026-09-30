@@ -9,8 +9,10 @@ function normalizePath(event: any): any {
 
   if (currentPath.startsWith(functionPrefix)) {
     const pathAfterFunction = currentPath.slice(functionPrefix.length) || '/';
-    normalized.path = pathAfterFunction;
-    normalized.rawPath = pathAfterFunction;
+    const apiPath = pathAfterFunction === '/' ? '/api' : `/api${pathAfterFunction}`;
+
+    normalized.path = apiPath;
+    normalized.rawPath = apiPath;
   }
 
   return normalized;
@@ -18,8 +20,8 @@ function normalizePath(event: any): any {
 
 export const handler = async (event: any, context: any) => {
   if (!cachedHandler) {
-    // Garante que server.ts seja carregado em modo serverless e nunca execute app.listen().
     process.env.NETLIFY_FUNCTION = 'true';
+
     const { app } = await import('../../server');
     cachedHandler = serverless(app);
   }
